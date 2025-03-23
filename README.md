@@ -32,6 +32,14 @@ This is a zero-dependency project and is derived only for the existing `zig` `st
 
 This library follows the organization of the `zig` `std` library. You will see familiar hierarchies like `stdx.mem` for memory stuff and `std.RingBuffer` for other data structures. As I build this library out, I'll add more notes and documentation.
 
+### Modules
+
+- `stdx`
+  - `stdx.MemoryPool`
+  - `stdx.RingBuffer`
+
+The root `stdx` module
+
 ## Examples
 
 There are examples included in this library that go over a brief overview of how each feature can be used. You can build and run examples by performing the following steps.
@@ -46,13 +54,13 @@ Examples are best used if you modify the code and add print statements to figure
 
 ## Data Structures
 
-### MemoryPool
+### `stdx.MemoryPool`
 
 A memory pool is a structure that uses pre-allocated blocks of memory to quickly allocoate and deallocate resources quickly. It is very useful in situations where you have statically allocated memory but you will have fluctuating usage of that memory. A good example would be handling messages flowing throughout a system.
 
 See [example](./examples/memory_pool.zig) and [source](./src/memory_pool.zig) for more information on usage.
 
-### RingBuffer
+### `stdx.RingBuffer`
 
 A ring buffer is a data structure that is really useful for managing memory in a fixed memory allocation. This particular implementation is particularly useful for a fixed size queue. Kobolds uses the RingBuffer data structure for inboxes and outboxes for when messages are received/sent through TCP connections.
 
@@ -60,4 +68,12 @@ See [example](./examples/ring_buffer.zig) and [source](./src/ring_buffer.zig) fo
 
 ### ManagedQueue
 
+... TODO
+
 ### UnmanagedQueue
+
+... TODO
+
+## IO
+
+### `stdx.io`
