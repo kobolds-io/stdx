@@ -9,10 +9,10 @@ const Error = error{
     OutOfMemory,
 };
 
-/// A `MemoryPool` is a software or hardware structure used to manage dynamic
-/// memory allocation. It is a pre-allocated region of memory that is divided
-/// into fixed-size blocks, which can be allocated and deallocated more
-/// efficiently than using traditional methods
+/// A `MemoryPool` is a structure used to manage dynamic memory allocation.
+/// It is a pre-allocated region of memory that is divided into fixed-size
+/// blocks, which can be allocated and deallocated more efficiently than
+/// using traditional methods like global allocators.
 pub fn MemoryPool(comptime T: type) type {
     return struct {
         const Self = @This();
