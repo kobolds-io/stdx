@@ -11,7 +11,7 @@ This library follows the organization of the `zig` `std` library. You will see f
 
 ## Data Structures
 
-### CircularQueue
+### RingBuffer
 
 ... TODO
 
