@@ -13,9 +13,9 @@ This is a zero-dependency project and is derived only for the existing `zig` `st
    1. [Usage](#usage)
    2. [Installation](#installation)
    3. [Organization](#organization)
-      1. [Modules](#modules)
    4. [Examples](#examples)
-   5. [stdx](#stdx)
+2. [Documentation](#documentation)
+   1. [stdx](#stdx)
       1. [stdx.MemoryPool](#stdx.memorypool)
       2. [stdx.RingBuffer](#stdx.ringbuffer)
       3. [stdx.ManagedQueue](#stdx.managedqueue)
@@ -34,10 +34,6 @@ This is a zero-dependency project and is derived only for the existing `zig` `st
 
 This library follows the organization of the `zig` `std` library. You will see familiar hierarchies like `stdx.mem` for memory stuff and `std.RingBuffer` for other data structures. As I build this library out, I'll add more notes and documentation.
 
-### Modules
-
-The root `stdx` module
-
 ## Examples
 
 There are examples included in this library that go over a brief overview of how each feature can be used. You can build and run examples by performing the following steps.
@@ -49,6 +45,10 @@ zig build examples
 ```
 
 Examples are best used if you modify the code and add print statements to figure out what is going on. Look at the source code files for additional tips on how features work by taking a look at the `test`s included in the source code.
+
+---
+
+# Documentation
 
 ## stdx
 
