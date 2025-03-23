@@ -15,8 +15,8 @@ This is a zero-dependency project and is derived only for the existing `zig` `st
    3. [Library Organization](#library-organization)
    4. [Examples](#examples)
    5. [Data Structures](#data-structures)
-      1. [RingBuffer](#ringbuffer)
-      2. [MemoryPool](#memorypool)
+      1. [MemoryPool](#memorypool)
+      2. [RingBuffer](#ringbuffer)
       3. [ManagedQueue](#managedqueue)
       4. [UnmanagedQueue](#unmanagedqueue)
 
@@ -46,13 +46,17 @@ Examples are best used if you modify the code and add print statements to figure
 
 ## Data Structures
 
+### MemoryPool
+
+A memory pool is a structure that uses pre-allocated blocks of memory to quickly allocoate and deallocate resources quickly. It is very useful in situations where you have statically allocated memory but you will have fluctuating usage of that memory. A good example would be handling messages flowing throughout a system.
+
+See [example](./examples/memory_pool.zig) and [source](./src/memory_pool.zig) for more information on usage.
+
 ### RingBuffer
 
 A ring buffer is a data structure that is really useful for managing memory in a fixed memory allocation. This particular implementation is particularly useful for a fixed size queue. Kobolds uses the RingBuffer data structure for inboxes and outboxes for when messages are received/sent through TCP connections.
 
 See [example](./examples/ring_buffer.zig) and [source](./src/ring_buffer.zig) for more information on usage.
-
-### MemoryPool
 
 ### ManagedQueue
 
