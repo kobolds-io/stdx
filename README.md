@@ -54,7 +54,7 @@ This library follows the organization of the `zig` `std` library. You will see f
 
 ## Examples
 
-There are examples included in this library that go over a brief overview of how each feature can be used. You can build and run examples by performing the following steps.
+There are examples included in this library that go over a brief overview of how each feature can be used. You can build and run examples by performing the following steps. Examples are in the [examples](./examples/) directory. Examples are always welcome.
 
 ```bash
 zig build examples
