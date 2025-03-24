@@ -1,15 +1,14 @@
-# stdx
+# Overview
 
-**in development** this project is current in development and should be used at your own risk. Until there is a stable tagged release, be careful.
+**CAUTION** this project is current in development and should be used at your own risk. Until there is a stable tagged release, be careful.
 
-This is a library adding several genrally useful tools that are either not included in the standard library or have slightly different behavior.
-As the `zig` programming language matures, we should get more and more awesome `std` library features but until then...
+This is a library adding several generally useful tools that are either not included in the standard library or have slightly different behavior. As the `zig` programming language matures, we should get more and more awesome `std` library features but until then...
 
 This is a zero-dependency project and is derived only for the existing `zig` `std` library.
 
 # Table of Contents
 
-1. [stdx](#stdx)
+1. [Overview](#overview)
    1. [Usage](#usage)
    2. [Installation](#installation)
    3. [Organization](#organization)
@@ -24,7 +23,24 @@ This is a zero-dependency project and is derived only for the existing `zig` `st
 
 ## Usage
 
-... TODO
+Using `stdx` is just as simple as using any other `zig` dependency.
+
+```zig
+// import the library into your file
+const stdx = @import("stdx");
+
+fn main() !void {
+    // your code
+    // ....
+
+    const memory_pool = stdx.MemoryPool(i32).init(allocator, 200);
+    defer memory_pool.deinit();
+
+    // your code
+    // ...
+}
+
+```
 
 ## Installation
 
