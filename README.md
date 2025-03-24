@@ -4,7 +4,7 @@
 
 This is a library adding several generally useful tools that are either not included in the standard library or have slightly different behavior. As the `zig` programming language matures, we should get more and more awesome `std` library features but until then...
 
-This is a zero-dependency project and is derived only for the existing `zig` `std` library.
+All data structures, algorithms and utilities included in this library are written from scratch. This minimizes the threat of malicious or unintentional supply chain attacks. It also ensures that all code is controlled in a single place and HOPEFULLY minimizes the chance that `zig` turns into the hellish monstrocity that is `npm` and the `nodejs` ecosystem.
 
 # Table of Contents
 
@@ -13,6 +13,8 @@ This is a zero-dependency project and is derived only for the existing `zig` `st
    2. [Installation](#installation)
    3. [Organization](#organization)
    4. [Examples](#examples)
+   5. [Contributing](#contributing)
+   6. [Code of Conduct](#code-of-conduct)
 2. [Documentation](#documentation)
    1. [stdx](#stdx)
       1. [stdx.MemoryPool](#stdx.memorypool)
@@ -61,6 +63,14 @@ zig build examples
 ```
 
 Examples are best used if you modify the code and add print statements to figure out what is going on. Look at the source code files for additional tips on how features work by taking a look at the `test`s included in the source code.
+
+## Contributing
+
+Please see [Contributing](./CONTRIBUTING.md) for more information on how to get involved.
+
+## Code of Conduct
+
+Please see the [Code of Conduct](./CONTRIBUTING.md) located within the CONTRIBUTING.md file.
 
 ---
 
