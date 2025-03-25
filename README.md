@@ -72,7 +72,11 @@ There are benchmarks included in this library that you can run your local hardwa
 **Note** Benchmarks are always a point of contention between everyone. One of my goals is to provision some hardware in the cloud that is consistently used as the hardware for all comparisons. Until then, you can run the code locally to test out your performance.
 
 ```bash
+# with standard optimizations (debug build)
 zig build bench
+
+# or with more optimizations
+zig build bench -Doptimize=ReleaseFast
 ```
 
 Example output
