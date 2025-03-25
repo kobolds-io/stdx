@@ -3,6 +3,14 @@ const testing = std.testing;
 const assert = std.debug.assert;
 const atomic = std.atomic;
 
+/// A generic node used within the `UnmanagedQueue` to store data of type `T`.
+///
+/// This struct represents a single node in the queue. Each node contains data of type `T` and a
+/// pointer to the next node in the queue (forming a linked list). The `next` pointer is nullable,
+/// allowing nodes to be at the end of the list (in which case `next` will be `null`).
+///
+/// The `Node` struct is designed to be used with the `UnmanagedQueue` and is responsible for storing
+/// individual elements and linking them together in the queue.
 pub fn Node(comptime T: type) type {
     return struct {
         const Self = @This();
@@ -10,39 +18,35 @@ pub fn Node(comptime T: type) type {
         data: T,
         next: ?*Self = null,
 
-        ref_count: atomic.Value(u32),
-
         pub fn new(data: T) Self {
             return Self{
                 .data = data,
                 .next = null,
-                .ref_count = atomic.Value(u32).init(0),
             };
-        }
-
-        pub fn refs(self: *Self) u32 {
-            return self.ref_count.load(.seq_cst);
-        }
-
-        pub fn ref(self: *Self) void {
-            _ = self.ref_count.fetchAdd(1, .seq_cst);
-        }
-
-        pub fn deref(self: *Self) void {
-            const v = self.ref_count.load(.seq_cst);
-            if (v == 0) return;
-            _ = self.ref_count.cmpxchgWeak(v, v - 1, .seq_cst, .seq_cst);
         }
     };
 }
 
+/// A generic queue implementation that stores nodes of type `Node(T)`.
+///
+/// This struct represents a queue that uses nodes to store data of type `T`. The queue is unmanaged,
+/// meaning it does not perform automatic memory management (such as garbage collection) or allocator
+/// handling for the nodes. It allows direct manipulation of the queue's internal state, including
+/// the head, tail, and count.
+///
+/// The queue supports typical queue operations such as enqueue, dequeue, checking if it’s empty, and
+/// resetting the queue. Nodes in the queue are linked through their `next` pointer, forming a chain of elements.
 pub fn UnmanagedQueue(comptime T: type) type {
     return struct {
         const Self = @This();
         pub const NodeType = Node(T);
 
+        /// Node at the front of the queue
         head: ?*Node(T),
+        /// Node at the back of the queue
         tail: ?*Node(T),
+        /// Property that tracks how many nodes are in the queue. This value is incremented/decremented as
+        /// nodes are added or removed. Users should not directly modify this parameter.
         count: u32,
 
         pub fn new() Self {
@@ -53,6 +57,13 @@ pub fn UnmanagedQueue(comptime T: type) type {
             };
         }
 
+        /// Checks if the queue is empty.
+        /// A queue is considered empty if the count of elements is zero, and both the head and tail are null.
+        ///
+        /// This function performs sanity checks to ensure that the count is consistent with the state
+        /// of the queue (i.e., if the count is zero, both head and tail must be null, and if the count is
+        /// greater than zero, neither head nor tail can be null). If the count is inconsistent with the
+        /// actual state of the queue, an assertion will fail.
         fn isEmpty(self: *Self) bool {
             if (self.count == 0) {
                 assert(self.head == null);
@@ -69,6 +80,11 @@ pub fn UnmanagedQueue(comptime T: type) type {
             return false;
         }
 
+        /// Enqueues a single node at the end of the queue.
+        ///
+        /// This function adds the specified `node` to the end (tail) of the queue. If the queue is empty,
+        /// the node becomes both the head and the tail of the queue. Otherwise, the node is linked as the
+        /// next node of the current tail, and the tail pointer is updated to point to the new node.
         pub fn enqueue(self: *Self, node: *Node(T)) void {
 
             // always increment the count after this block
@@ -87,6 +103,13 @@ pub fn UnmanagedQueue(comptime T: type) type {
             self.tail = node;
         }
 
+        /// Dequeues and returns the node at the front of the queue.
+        ///
+        /// This function removes the node from the front (head) of the queue and returns a pointer to it.
+        /// The head pointer is updated to the next node in the queue, and the count is decremented.
+        /// If the queue becomes empty after the dequeue, both the head and tail are set to null.
+        ///
+        /// If the queue is empty, the function returns `null`.
         pub fn dequeue(self: *Self) ?*Node(T) {
             if (self.isEmpty()) return null;
 
@@ -108,7 +131,13 @@ pub fn UnmanagedQueue(comptime T: type) type {
             return node;
         }
 
-        /// drop all references to all nodes and unwind the queue
+        /// Resets the queue by dropping all references to the nodes and clearing the state.
+        ///
+        /// This function removes all elements from the queue, effectively "emptying" it. Both the head
+        /// and tail pointers are set to null, and the count is reset to zero. The queue is in an empty state
+        /// after calling this function.
+        ///
+        /// **Note** this function does not unlink the nodes from each other.
         pub fn reset(self: *Self) void {
             if (self.isEmpty()) return;
 
@@ -117,7 +146,9 @@ pub fn UnmanagedQueue(comptime T: type) type {
             self.count = 0;
         }
 
-        /// This version of concatentate assumes that this and the other queue share the same allocator.
+        /// Concatenates the given `other` queue to this queue (`self`).
+        /// Assumes that `self` and `other` share the same allocator. This means no memory reallocation
+        /// is performed; instead, the head and tail pointers are updated accordingly.
         pub fn concatenate(self: *Self, other: *Self) void {
             if (other.isEmpty()) return; // No need to do anything if the other queue is empty
 
@@ -140,7 +171,8 @@ pub fn UnmanagedQueue(comptime T: type) type {
             other.count = 0;
         }
 
-        /// Enqueue many messages at a time. This is faster than calling enqueue one at a time
+        /// Enqueues multiple nodes at once by linking them together in the queue.
+        /// This function is used to enqueue a slice of nodes (`[]const *Node(T)`), where each node points to the next one.
         pub fn enqueueMany(self: *Self, nodes: []const *Node(T)) void {
 
             // do nothing if the incoming messages is actually empty
