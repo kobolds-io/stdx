@@ -64,7 +64,7 @@ pub fn UnmanagedQueue(comptime T: type) type {
         /// of the queue (i.e., if the count is zero, both head and tail must be null, and if the count is
         /// greater than zero, neither head nor tail can be null). If the count is inconsistent with the
         /// actual state of the queue, an assertion will fail.
-        fn isEmpty(self: *Self) bool {
+        pub fn isEmpty(self: *Self) bool {
             if (self.count == 0) {
                 assert(self.head == null);
                 assert(self.tail == null);
@@ -197,6 +197,11 @@ pub fn UnmanagedQueue(comptime T: type) type {
 
             // set the tail to the last message
             self.tail = nodes[nodes.len - 1];
+        }
+
+        pub fn N(self: Self) type {
+            _ = self;
+            return Node(T);
         }
     };
 }
