@@ -36,35 +36,10 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
-        // See `zig fetch --save <url>` for a command-line interface for adding dependencies.
-        //.example = .{
-        //    // When updating this field to a new URL, be sure to delete the corresponding
-        //    // `hash`, otherwise you are communicating that you expect to find the old hash at
-        //    // the new URL. If the contents of a URL change this will result in a hash mismatch
-        //    // which will prevent zig from using it.
-        //    .url = "https://example.com/foo.tar.gz",
-        //
-        //    // This is computed from the file contents of the directory of files that is
-        //    // obtained after fetching `url` and applying the inclusion rules given by
-        //    // `paths`.
-        //    //
-        //    // This field is the source of truth; packages do not come from a `url`; they
-        //    // come from a `hash`. `url` is just one of many possible mirrors for how to
-        //    // obtain a package matching this `hash`.
-        //    //
-        //    // Uses the [multihash](https://multiformats.io/multihash/) format.
-        //    .hash = "...",
-        //
-        //    // When this is provided, the package is found in a directory relative to the
-        //    // build root. In this case the package's hash is irrelevant and therefore not
-        //    // computed. This field and `url` are mutually exclusive.
-        //    .path = "foo",
-        //
-        //    // When this is set to `true`, a package is declared to be lazily
-        //    // fetched. This makes the dependency only get fetched if it is
-        //    // actually used.
-        //    .lazy = false,
-        //},
+        .zbench = .{
+            .url = "https://github.com/hendriknielaender/zBench/archive/v0.9.3.tar.gz",
+            .hash = "122054a78e249bb9e6a7f13b5f13f304c97715eb03394e89f12fa763ee6f8a9a4d35",
+        },
     },
 
     // Specifies the set of files and directories that are included in this package.
