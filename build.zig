@@ -22,6 +22,8 @@ pub fn build(b: *std.Build) void {
 
     setupTests(b, target, optimize);
 
+    setupBenchmarks(b, target, optimize);
+
     setupExamples(b, target, optimize);
 }
 
@@ -78,4 +80,32 @@ fn setupExamples(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.
         example_step.dependOn(&example_exe.step);
         example_step.dependOn(&install_example.step);
     }
+}
+
+fn setupBenchmarks(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
+    const bench_lib = b.addTest(.{
+        .name = "bench",
+        .root_source_file = b.path("benchmarks/bench.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const stdx_mod = b.addModule("stdx", .{
+        .root_source_file = b.path("src/stdx.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const zbench_dep = b.dependency("zbench", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const zbench_mod = zbench_dep.module("zbench");
+
+    bench_lib.root_module.addImport("stdx", stdx_mod);
+    bench_lib.root_module.addImport("zbench", zbench_mod);
+
+    const run_bench_tests = b.addRunArtifact(bench_lib);
+    const bench_test_step = b.step("bench", "Run benchmark tests");
+    bench_test_step.dependOn(&run_bench_tests.step);
 }
