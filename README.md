@@ -13,8 +13,9 @@ All data structures, algorithms and utilities included in this library are writt
    2. [Installation](#installation)
    3. [Organization](#organization)
    4. [Examples](#examples)
-   5. [Contributing](#contributing)
-   6. [Code of Conduct](#code-of-conduct)
+   5. [Benchmarks](#benchmarks)
+   6. [Contributing](#contributing)
+   7. [Code of Conduct](#code-of-conduct)
 2. [Documentation](#documentation)
    1. [stdx](#stdx)
       1. [ManagedQueue](#managedqueue)
@@ -63,6 +64,41 @@ zig build examples
 ```
 
 Examples are best used if you modify the code and add print statements to figure out what is going on. Look at the source code files for additional tips on how features work by taking a look at the `test`s included in the source code.
+
+## Benchmarks
+
+There are benchmarks included in this library that you can run your local hardware or target hardware. You can run benchmarksby performing the following steps. Benchmarks are in the [benchmarks](./benchmarks/) directory. More benchmarks are always welcome. Benchmarks in this library are written using [`zbench`](https://github.com/hendriknielaender/zBench) by hendriknielander. Please check out that repo and star it and support other `zig` developers.
+
+**Note** Benchmarks are always a point of contention between everyone. One of my goals is to provision some hardware in the cloud that is consistently used as the hardware for all comparisons. Until then, you can run the code locally to test out your performance.
+
+```bash
+# with standard optimizations (debug build)
+zig build bench
+
+# or with more optimizations
+zig build bench -Doptimize=ReleaseFast
+```
+
+Example output
+
+```plaintext
+--------------------------------------------------------
+  Operating System: linux x86_64
+  CPU:              13th Gen Intel(R) Core(TM) i9-13900K
+  CPU Cores:        24
+  Total Memory:     23.298GiB
+--------------------------------------------------------
+
+|-----------------------|
+| RingBuffer Benchmarks |
+|-----------------------|
+benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995
+-----------------------------------------------------------------------------------------------------------------------------
+enqueue 50000 items    65535    10.341s        157.795us ± 69.484us   (154.559us ... 16.834ms)     156.684us  184.294us  193.402us
+enqueueMany 50000 item 65535    10.334s        157.688us ± 8.199us    (154.661us ... 590.616us)    157.991us  184.786us  194.115us
+dequeue 50000 items    65535    10.303s        157.214us ± 10.164us   (154.466us ... 1.361ms)      154.634us  184.993us  195.988us
+dequeueMany 50000 item 65535    5.153s         78.639us ± 41.379us    (77.23us ... 9.312ms)        77.279us   94.893us   104.777us
+```
 
 ## Contributing
 
