@@ -3,7 +3,6 @@ const assert = std.debug.assert;
 
 const stdx = @import("stdx");
 const UnmanagedQueue = stdx.UnmanagedQueue;
-const Node = stdx.UnmanagedQueueNode;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -11,15 +10,17 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     // initialize an unmanaged queue of i32s
-    var unmanaged_queue = UnmanagedQueue(i32).new();
+    const UnmanagedQueue_T = UnmanagedQueue(i32);
+    const Node = UnmanagedQueue_T.NodeType;
+    var unmanaged_queue = UnmanagedQueue_T.new();
 
     for (0..100) |i| {
         // allocate the node outside of the control of the unmanaged queue
-        const n = try allocator.create(Node(i32));
+        const n = try allocator.create(Node);
         errdefer allocator.destroy(n);
 
         // set the value of this pointer
-        n.* = Node(i32).new(@intCast(i));
+        n.* = Node.new(@intCast(i));
 
         // add this node to the queue
         unmanaged_queue.enqueue(n);
