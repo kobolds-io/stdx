@@ -56,6 +56,7 @@ fn setupExamples(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.
         "managed_queue",
         "memory_pool",
         "ring_buffer",
+        "unmanaged_queue",
     };
 
     for (example_names) |example_name| {

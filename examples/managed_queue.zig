@@ -1,6 +1,5 @@
 const std = @import("std");
 const assert = std.debug.assert;
-const log = std.log.scoped(.ExampleManagedQueue);
 
 const stdx = @import("stdx");
 const ManagedQueue = stdx.ManagedQueue;
@@ -10,7 +9,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    // initialize a managed pool of i32s
+    // initialize a managed queue of i32s
     var managed_queue = ManagedQueue(i32).init(allocator);
 
     defer managed_queue.deinit();
@@ -27,8 +26,8 @@ pub fn main() !void {
     // ensure that the dequeued item was actually the same item enqueued
     assert(dequeued_item == 123);
 
-    // trying to debug another item from the queue results in null
     assert(managed_queue.isEmpty());
 
+    // trying to dequeue another item from the queue results in null
     assert(managed_queue.dequeue() == null);
 }
