@@ -17,11 +17,11 @@ All data structures, algorithms and utilities included in this library are writt
    6. [Code of Conduct](#code-of-conduct)
 2. [Documentation](#documentation)
    1. [stdx](#stdx)
-      1. [stdx.ManagedQueue](#stdx.managedqueue)
-      2. [stdx.MemoryPool](#stdx.memorypool)
-      3. [stdx.RingBuffer](#stdx.ringbuffer)
-      4. [stdx.UnmanagedQueue](#stdx.unmanagedqueue)
-      5. [stdx.io](#stdx.io)
+      1. [ManagedQueue](#managedqueue)
+      2. [MemoryPool](#memorypool)
+      3. [RingBuffer](#ringbuffer)
+      4. [UnmanagedQueue](#unmanagedqueue)
+      5. [IO](#io)
 
 ## Usage
 
@@ -80,25 +80,25 @@ Please see the [Code of Conduct](./CONTRIBUTING.md) located within the CONTRIBUT
 
 The `stdx` top level module. Directly contains data structures and is the parent module to modules like `io` and `net`.
 
-### stdx.ManagedQueue
+### ManagedQueue
 
 The `ManagedQueue` is a generic queue implementation that uses a singly linked list. It allows for the management of a queue with operations like enqueueing, dequeueing, checking if the queue is empty, concatenating two queues, and handles the allocation/deallocation of memory used by the queue. The queue is managed by an allocator, which is used for creating and destroying nodes.
 
 See [example](./examples/managed_queue.zig) and [source](./src/managed_queue.zig) for more information on usage.
 
-### stdx.MemoryPool
+### MemoryPool
 
 A `MemoryPool` is a structure that uses pre-allocated blocks of memory to quickly allocoate and deallocate resources quickly. It is very useful in situations where you have statically allocated memory but you will have fluctuating usage of that memory. A good example would be handling messages flowing throughout a system.
 
 See [example](./examples/memory_pool.zig) and [source](./src/memory_pool.zig) for more information on usage.
 
-### stdx.RingBuffer
+### RingBuffer
 
 A `RingBuffer` is a data structure that is really useful for managing memory in a fixed memory allocation. This particular implementation is particularly useful for a fixed size queue. Kobolds uses the `RingBuffer` data structure for inboxes and outboxes for when messages are received/sent through TCP connections.
 
 See [example](./examples/ring_buffer.zig) and [source](./src/ring_buffer.zig) for more information on usage.
 
-### stdx.UnmanagedQueue
+### UnmanagedQueue
 
 The `UnmanagedQueue` is a generic queue implementation that uses a singly linked list. It most closely represents the `std.SinglyLinkedList` in its functionality. Differing from the `ManagedQueue`, the `UnmanagedQueue` requires memory allocations to be external to the queue and provides a generic `Node` structure to help link everything together.
 
@@ -106,6 +106,6 @@ Please also see `UnmanagedQueueNode` which is the `Node` used by the `UnmanagedQ
 
 See [example](./examples/unmanaged_queue.zig) and [source](./src/unmanaged_queue.zig) for more information on usage.
 
-### stdx.io
+### IO
 
 Module containing solutions for handling input and output
