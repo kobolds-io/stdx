@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const version = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 0 };
+const version = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 1 };
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
