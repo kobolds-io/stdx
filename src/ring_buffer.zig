@@ -114,16 +114,26 @@ pub fn RingBuffer(comptime T: type) type {
             return removed_count;
         }
 
-        // TODO: Implement concatenate
-        //  Combine two ring buffers of the same type together. This should
-        //  be fairly destructive. It should clear out the other ring buffer.
-        //  Additionally, it should return an error if the available slots in
-        //  self is less than the other.count
+        /// Concatenate the contents of another ring buffer into this one.
+        ///
+        /// This method appends all elements from the `other` ring buffer into `self`,
+        /// preserving the order of items as they appeared in `other`.
+        /// The operation is destructive to `other`
         pub fn concatenate(self: *Self, other: *Self) !void {
-            _ = self;
-            _ = other;
+            if (self.available() < other.count) return Error.BufferFull;
 
-            @panic("RingBuffer.concatenate: not implemented");
+            const capacity = self.capacity;
+
+            var i: usize = 0;
+            while (i < other.count) : (i += 1) {
+                const index = (other.head + i) % capacity;
+                const value = other.buffer[index];
+                self.buffer[self.tail] = value;
+                self.tail = (self.tail + 1) % capacity;
+            }
+
+            self.count += other.count;
+            other.reset();
         }
 
         /// Return true if the all slots are available
@@ -297,4 +307,25 @@ test "dequeueMany" {
     for (out[0..dequeued_items_count]) |v| {
         try testing.expectEqual(test_value, v);
     }
+}
+
+test "concatenate" {
+    const allocator = std.testing.allocator;
+    var a = try RingBuffer(u32).init(allocator, 10);
+    defer a.deinit();
+
+    var b = try RingBuffer(u32).init(allocator, 5);
+    defer b.deinit();
+
+    _ = a.enqueueMany(&.{ 1, 2, 3 });
+    _ = b.enqueueMany(&.{ 4, 5 });
+
+    try a.concatenate(&b);
+
+    try testing.expectEqual(@as(u32, 5), a.count);
+    try testing.expectEqual(@as(u32, 0), b.count);
+
+    var buf: [5]u32 = undefined;
+    const n = a.dequeueMany(&buf);
+    try testing.expectEqualSlices(u32, &.{ 1, 2, 3, 4, 5 }, buf[0..n]);
 }
