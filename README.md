@@ -47,7 +47,19 @@ fn main() !void {
 
 ## Installation
 
-... TODO
+You can install `stdx` just like any other `zig` dependency by editing your `build.zig.zon` file.
+
+```zig
+    .dependencies = .{
+        .stdx = .{
+            // the latest version of the library is v0.0.2
+            .url = "https://github.com/kobolds-io/stdx/archive/refs/tags/v0.0.2.tar.gz",
+            .hash = "stdx-0.0.2-nyLNAQrfAABlq4y4DXa5Y_exfKnhRiS_-YRz-0Fbv9L2",
+        },
+    },
+```
+
+run `zig build --fetch` to fetch the dependencies. Sometimes `zig` is helpful and it caches stuff for you in the `zig-cache` dir. Try deleting that directory if you see some issues.
 
 ## Organization
 
