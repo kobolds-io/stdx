@@ -106,7 +106,7 @@ Please see [Contributing](./CONTRIBUTING.md) for more information on how to get 
 
 ## Code of Conduct
 
-Please see the [Code of Conduct](./CONTRIBUTING.md) located within the CONTRIBUTING.md file.
+Please see the [Code of Conduct](./CODE_OF_CONDUCT.md) file. Simple library, simple rules.
 
 ---
 
