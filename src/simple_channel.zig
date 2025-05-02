@@ -4,6 +4,8 @@ const assert = std.debug.assert;
 
 /// A very simple implementation of a channel. Very useful for sending signals across
 /// threads for syncing operations or to ensure that a thread has completed a task.
+/// This channel is able to send multiple values to the receiver but can only hold a
+/// single value.
 pub fn SimpleChannel(comptime T: type) type {
     return struct {
         const Self = @This();
@@ -17,6 +19,9 @@ pub fn SimpleChannel(comptime T: type) type {
             return .{};
         }
 
+        /// Send a value to the receiver.
+        ///
+        /// `send` will block until the `receive` is called.
         pub fn send(self: *Self, value: T) void {
             self.mutex.lock();
             defer self.mutex.unlock();
@@ -31,6 +36,7 @@ pub fn SimpleChannel(comptime T: type) type {
             self.condition.signal();
         }
 
+        /// Receive a value from a sender.
         pub fn receive(self: *Self) T {
             self.mutex.lock();
             defer self.mutex.unlock();
@@ -99,4 +105,27 @@ test "bad behavior" {
     defer th.join();
 
     try testing.expectError(error.Timeout, channel.timedReceive(1 * std.time.ns_per_us));
+}
+
+test "receive multiple values" {
+    const testerFn = struct {
+        fn run(channel: *SimpleChannel(u32)) void {
+            channel.send(1);
+            channel.send(2);
+            channel.send(3);
+        }
+    }.run;
+
+    var channel = SimpleChannel(u32).init();
+    const th = try std.Thread.spawn(.{}, testerFn, .{&channel});
+    defer th.join();
+
+    const v1 = channel.receive();
+    try testing.expectEqual(1, v1);
+
+    const v2 = channel.receive();
+    try testing.expectEqual(2, v2);
+
+    const v3 = channel.receive();
+    try testing.expectEqual(3, v3);
 }

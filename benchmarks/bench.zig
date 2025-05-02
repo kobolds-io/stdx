@@ -10,4 +10,5 @@ test "prints system info" {
 
 comptime {
     _ = @import("ring_buffer.zig");
+    _ = @import("simple_channel.zig");
 }
