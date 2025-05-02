@@ -106,6 +106,14 @@ pub fn Channel(comptime T: type) type {
             return self.buffer.capacity;
         }
 
+        pub fn isEmpty(self: *Self) bool {
+            return self.buffer.isEmpty();
+        }
+
+        pub fn isFull(self: *Self) bool {
+            return self.buffer.isFull();
+        }
+
         /// Unsafely Reset the channel and drop ALL items held within
         ///
         /// `reset` does not deallocate any memory, it only removes all the items from
@@ -139,14 +147,14 @@ test "multi items" {
     defer channel.deinit();
 
     // multiple items can be buffered
-    for (0..channel.buffer.capacity) |i| {
+    for (0..channel.capacity()) |i| {
         channel.send(i);
     }
 
     try testing.expect(channel.buffer.isFull());
 
     // values are received in the same order that they are sent
-    for (0..channel.buffer.capacity) |i| {
+    for (0..channel.capacity()) |i| {
         const v = channel.receive();
         try testing.expectEqual(v, i);
     }
@@ -164,7 +172,7 @@ test "full behavior" {
             // send 20 items, which is more than the capacity of the channel
             // we are relying on the slow receiver to pull items out of the channel
             // thus opening available slots for the new items
-            for (0..chan.buffer.capacity * 2) |_| {
+            for (0..chan.capacity() * 2) |_| {
                 std.time.sleep(1 * std.time.ns_per_ms);
                 chan.send(value);
             }
@@ -175,14 +183,14 @@ test "full behavior" {
     const slowReceive = struct {
         pub fn slowReceive(chan: *Channel(usize)) void {
             var iters: usize = 0;
-            while (!chan.buffer.isEmpty()) {
+            while (!chan.isEmpty()) {
                 std.time.sleep(10 * std.time.ns_per_ms);
                 _ = chan.receive();
                 iters += 1;
             }
 
             // ensure that we are pull ALL of the items out of the channel
-            testing.expectEqual(chan.buffer.capacity * 2, iters) catch unreachable;
+            testing.expectEqual(chan.capacity() * 2, iters) catch unreachable;
         }
     }.slowReceive;
 
