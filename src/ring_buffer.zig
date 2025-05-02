@@ -17,7 +17,7 @@ pub fn RingBuffer(comptime T: type) type {
         allocator: std.mem.Allocator,
         /// total number of slots created during creation. The size of the `buffer`
         /// allocated during `init` is equal to the `capacity`.
-        capacity: u32,
+        capacity: usize,
         /// backing buffer used to store the values of the ring buffer.
         buffer: []T,
         /// track the start of the ring buffer slots.
@@ -25,9 +25,9 @@ pub fn RingBuffer(comptime T: type) type {
         /// track the end of the ring buffer slots.
         tail: usize,
         /// current number of items occupying slots
-        count: u32,
+        count: usize,
 
-        pub fn init(allocator: std.mem.Allocator, capacity: u32) !Self {
+        pub fn init(allocator: std.mem.Allocator, capacity: usize) !Self {
             const buffer = try allocator.alloc(T, capacity);
             errdefer allocator.free(buffer);
 
@@ -47,7 +47,7 @@ pub fn RingBuffer(comptime T: type) type {
 
         /// return the number of available slots remaining in the ring buffer. An
         /// available slot is a slot in which no tracked value is assigned.
-        pub fn available(self: *Self) u32 {
+        pub fn available(self: *Self) usize {
             return self.capacity - self.count;
         }
 
@@ -80,8 +80,8 @@ pub fn RingBuffer(comptime T: type) type {
         /// slice exeeds the available slots in the ring buffer, then only the maximum
         /// items will be added without exceeding the capacity of the ring buffer.
         /// `enqueueMany` returns the number of items inserted into the ring buffer.
-        pub fn enqueueMany(self: *Self, values: []const T) u32 {
-            var added_count: u32 = 0;
+        pub fn enqueueMany(self: *Self, values: []const T) usize {
+            var added_count: usize = 0;
             for (values) |value| {
                 if (self.isFull()) break;
 
@@ -100,8 +100,8 @@ pub fn RingBuffer(comptime T: type) type {
         ///
         /// **Note** As a maximum, `dequeueMany` will only dequeue as many items
         /// can fit within the capacity of the `out` slice.
-        pub fn dequeueMany(self: *Self, out: []T) u32 {
-            var removed_count: u32 = 0;
+        pub fn dequeueMany(self: *Self, out: []T) usize {
+            var removed_count: usize = 0;
             for (out) |*slot| {
                 if (self.isEmpty()) break;
 
@@ -281,7 +281,7 @@ test "dequeue" {
 
     try testing.expectEqual(true, ring_buffer.isFull());
 
-    var removed: u32 = ring_buffer.capacity;
+    var removed: usize = ring_buffer.capacity;
     while (ring_buffer.dequeue()) |v| : (removed -= 1) {
         try testing.expectEqual(test_value, v);
     }
@@ -331,10 +331,10 @@ test "dequeueMany" {
 
 test "concatenate" {
     const allocator = std.testing.allocator;
-    var a = try RingBuffer(u32).init(allocator, 10);
+    var a = try RingBuffer(usize).init(allocator, 10);
     defer a.deinit();
 
-    var b = try RingBuffer(u32).init(allocator, 5);
+    var b = try RingBuffer(usize).init(allocator, 5);
     defer b.deinit();
 
     _ = a.enqueueMany(&.{ 1, 2, 3 });
@@ -342,12 +342,12 @@ test "concatenate" {
 
     try a.concatenate(&b);
 
-    try testing.expectEqual(@as(u32, 5), a.count);
-    try testing.expectEqual(@as(u32, 0), b.count);
+    try testing.expectEqual(@as(usize, 5), a.count);
+    try testing.expectEqual(@as(usize, 0), b.count);
 
-    var buf: [5]u32 = undefined;
+    var buf: [5]usize = undefined;
     const n = a.dequeueMany(&buf);
-    try testing.expectEqualSlices(u32, &.{ 1, 2, 3, 4, 5 }, buf[0..n]);
+    try testing.expectEqualSlices(usize, &.{ 1, 2, 3, 4, 5 }, buf[0..n]);
 }
 
 test "copy preserves other and copies all values in order" {
@@ -361,7 +361,7 @@ test "copy preserves other and copies all values in order" {
 
     // Fill the source buffer with predictable values
     const values: [5]u8 = .{ 10, 20, 30, 40, 50 };
-    try testing.expectEqual(@as(u32, values.len), src.enqueueMany(&values));
+    try testing.expectEqual(@as(usize, values.len), src.enqueueMany(&values));
 
     // Ensure destination is empty before copy
     try testing.expectEqual(true, dest.isEmpty());
@@ -370,7 +370,7 @@ test "copy preserves other and copies all values in order" {
     try dest.copy(&src);
 
     // Ensure source is unchanged after copy
-    try testing.expectEqual(@as(u32, values.len), src.count);
+    try testing.expectEqual(@as(usize, values.len), src.count);
 
     for (values) |expected| {
         const actual = src.dequeue().?;
@@ -387,7 +387,7 @@ test "copy preserves other and copies all values in order" {
     }
 
     try testing.expectEqual(true, dest.isEmpty());
-    try testing.expectEqual(@as(u32, values.len), src.count);
+    try testing.expectEqual(@as(usize, values.len), src.count);
 }
 
 test "copy fails when not enough space in destination" {
