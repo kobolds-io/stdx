@@ -118,12 +118,34 @@ const BenchmarkRingBufferConcatenate = struct {
     }
 };
 
+const BenchmarkRingBufferCopy = struct {
+    const Self = @This();
+
+    list: *std.ArrayList(usize),
+    ring_buffer: *RingBuffer(usize),
+    ring_buffer_other: *RingBuffer(usize),
+
+    fn new(list: *std.ArrayList(usize), ring_buffer: *RingBuffer(usize), ring_buffer_other: *RingBuffer(usize)) Self {
+        return .{
+            .list = list,
+            .ring_buffer = ring_buffer,
+            .ring_buffer_other = ring_buffer_other,
+        };
+    }
+
+    pub fn run(self: Self, _: std.mem.Allocator) void {
+        self.ring_buffer.copy(self.ring_buffer_other) catch @panic("could not execute benchmark");
+    }
+};
+
 var ring_buffer_enqueue: RingBuffer(usize) = undefined;
 var ring_buffer_enqueueMany: RingBuffer(usize) = undefined;
 var ring_buffer_dequeue: RingBuffer(usize) = undefined;
 var ring_buffer_dequeueMany: RingBuffer(usize) = undefined;
 var ring_buffer_concatenate: RingBuffer(usize) = undefined;
 var ring_buffer_concatenate_other: RingBuffer(usize) = undefined;
+var ring_buffer_copy: RingBuffer(usize) = undefined;
+var ring_buffer_copy_other: RingBuffer(usize) = undefined;
 
 var data_list: std.ArrayList(usize) = undefined;
 const allocator = testing.allocator;
@@ -161,6 +183,17 @@ fn beforeEachConcatenate() void {
 
     // this is a sanity check
     assert(ring_buffer_concatenate.capacity <= ring_buffer_concatenate_other.count);
+}
+
+fn beforeEachCopy() void {
+    // NOTE: we are gonna do some hacking here. This is simulating that the ring buffer has some
+    // data inside of it but it simply does not. This operation should be almost instantaneos
+    ring_buffer_copy.reset();
+    ring_buffer_copy_other.reset();
+    ring_buffer_copy_other.fill(1);
+
+    // this is a sanity check
+    assert(ring_buffer_copy.capacity <= ring_buffer_copy_other.count);
 }
 
 test "RingBuffer benchmarks" {
@@ -201,6 +234,12 @@ test "RingBuffer benchmarks" {
     ring_buffer_concatenate_other = try RingBuffer(usize).init(allocator, @intCast(data_list.items.len));
     defer ring_buffer_concatenate_other.deinit();
 
+    ring_buffer_copy = try RingBuffer(usize).init(allocator, @intCast(data_list.items.len));
+    defer ring_buffer_copy.deinit();
+
+    ring_buffer_copy_other = try RingBuffer(usize).init(allocator, @intCast(data_list.items.len));
+    defer ring_buffer_copy_other.deinit();
+
     const ring_buffer_enqueue_title = try std.fmt.allocPrint(
         allocator,
         "enqueue {} items",
@@ -235,6 +274,13 @@ test "RingBuffer benchmarks" {
         .{constants.benchmark_max_queue_data_list},
     );
     defer allocator.free(ring_buffer_concatenate_title);
+
+    const ring_buffer_copy_title = try std.fmt.allocPrint(
+        allocator,
+        "copy {} items",
+        .{constants.benchmark_max_queue_data_list},
+    );
+    defer allocator.free(ring_buffer_copy_title);
 
     // register all the benchmark tests
     try bench.addParam(
@@ -275,6 +321,19 @@ test "RingBuffer benchmarks" {
         .{
             .hooks = .{
                 .before_each = beforeEachConcatenate,
+            },
+        },
+    );
+    try bench.addParam(
+        ring_buffer_copy_title,
+        &BenchmarkRingBufferCopy.new(
+            &data_list,
+            &ring_buffer_copy,
+            &ring_buffer_copy_other,
+        ),
+        .{
+            .hooks = .{
+                .before_each = beforeEachCopy,
             },
         },
     );
