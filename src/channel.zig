@@ -113,7 +113,7 @@ pub const CancellationToken = struct {
     }
 };
 
-test "multi item channel" {
+test "multi items" {
     const allocator = testing.allocator;
 
     var channel = try Channel(usize).init(allocator, 10);
@@ -133,7 +133,7 @@ test "multi item channel" {
     }
 }
 
-test "channel full behavior" {
+test "full behavior" {
     const allocator = testing.allocator;
 
     var channel = try Channel(usize).init(allocator, 100);
