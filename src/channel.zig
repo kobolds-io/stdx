@@ -10,9 +10,7 @@ pub fn Channel(comptime T: type) type {
     return struct {
         const Self = @This();
 
-        // TODO: convert buffer to a RingBuffer
         buffer: RingBuffer(T),
-
         mutex: std.Thread.Mutex = .{},
         not_empty: std.Thread.Condition = .{},
         not_full: std.Thread.Condition = .{},
