@@ -8,43 +8,61 @@ pub fn SimpleChannel(comptime T: type) type {
     return struct {
         const Self = @This();
 
-        condition: std.Thread.Condition,
-        mutex: std.Thread.Mutex,
-        value: T,
+        condition: std.Thread.Condition = .{},
+        mutex: std.Thread.Mutex = .{},
+        value: T = undefined,
+        has_value: bool = false,
 
         pub fn init() Self {
-            return Self{
-                .condition = std.Thread.Condition{},
-                .mutex = std.Thread.Mutex{},
-                .value = undefined,
-            };
+            return .{};
         }
 
         pub fn send(self: *Self, value: T) void {
             self.mutex.lock();
             defer self.mutex.unlock();
 
+            // Wait until the previous value has been received
+            while (self.has_value) {
+                self.condition.wait(&self.mutex);
+            }
+
             self.value = value;
-
+            self.has_value = true;
             self.condition.signal();
-        }
-
-        pub fn timedReceive(self: *Self, timeout_ns: u64) !T {
-            self.mutex.lock();
-            defer self.mutex.unlock();
-
-            try self.condition.timedWait(&self.mutex, timeout_ns);
-
-            return self.value;
         }
 
         pub fn receive(self: *Self) T {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            self.condition.wait(&self.mutex);
+            // Wait until a value is available
+            while (!self.has_value) {
+                self.condition.wait(&self.mutex);
+            }
 
-            return self.value;
+            const result = self.value;
+            self.has_value = false;
+            self.condition.signal(); // allow sender to send again
+            return result;
+        }
+
+        pub fn timedReceive(self: *Self, timeout_ns: u64) !T {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+
+            const fn_now: u64 = @intCast(std.time.nanoTimestamp());
+            const deadline: u64 = fn_now + timeout_ns;
+
+            while (!self.has_value) {
+                const loop_now: u64 = @intCast(std.time.nanoTimestamp());
+                if (loop_now >= deadline) return error.TimedOut;
+                try self.condition.timedWait(&self.mutex, deadline - loop_now);
+            }
+
+            const result = self.value;
+            self.has_value = false;
+            self.condition.signal();
+            return result;
         }
     };
 }
