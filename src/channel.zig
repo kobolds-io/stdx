@@ -15,9 +15,9 @@ pub fn Channel(comptime T: type) type {
         not_empty: std.Thread.Condition = .{},
         not_full: std.Thread.Condition = .{},
 
-        pub fn init(allocator: std.mem.Allocator, capacity: usize) !Self {
+        pub fn init(allocator: std.mem.Allocator, buffer_capacity: usize) !Self {
             return Self{
-                .buffer = try RingBuffer(T).init(allocator, capacity),
+                .buffer = try RingBuffer(T).init(allocator, buffer_capacity),
             };
         }
 
@@ -96,6 +96,25 @@ pub fn Channel(comptime T: type) type {
             const value = self.buffer.dequeue().?;
             self.not_full.signal();
             return value;
+        }
+
+        pub fn count(self: Self) usize {
+            return self.buffer.count;
+        }
+
+        pub fn capacity(self: Self) usize {
+            return self.buffer.capacity;
+        }
+
+        /// Unsafely Reset the channel and drop ALL items held within
+        ///
+        /// `reset` does not deallocate any memory, it only removes all the items from
+        /// the channel `buffer`.
+        pub fn reset(self: *Self) void {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+
+            self.buffer.reset();
         }
     };
 }

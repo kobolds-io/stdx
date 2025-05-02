@@ -22,7 +22,6 @@ const BenchmarkSimpleChannelSendReceive = struct {
     }
 
     pub fn run(self: Self, _: std.mem.Allocator) void {
-        // enqueue every data point in the list into the ring buffer
         for (self.list.items) |data| {
             self.channel.send(data);
             const v = self.channel.timedReceive(1 * std.time.ns_per_ms) catch unreachable;

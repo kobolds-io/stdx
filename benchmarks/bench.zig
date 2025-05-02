@@ -9,6 +9,7 @@ test "prints system info" {
 }
 
 comptime {
+    _ = @import("channel.zig");
     _ = @import("ring_buffer.zig");
     _ = @import("simple_channel.zig");
 }
