@@ -136,6 +136,26 @@ pub fn RingBuffer(comptime T: type) type {
             other.reset();
         }
 
+        /// Copy the contents of another ring buffer into this one while preserving
+        /// the contents in the `other` ring buffer.
+        ///
+        /// This method appends all the elements from `other` ring buffer into `self`,
+        /// preserving both the order of the items as they appeared in `other` as well
+        /// and the contents of `other`.
+        /// This operation is not destructive to `other`
+        pub fn copy(self: *Self, other: *Self) !void {
+            if (self.available() < other.count) return Error.BufferFull;
+
+            var i: usize = 0;
+            while (i < other.count) : (i += 1) {
+                const index = (other.head + i) % other.capacity;
+                self.buffer[self.tail] = other.buffer[index];
+                self.tail = (self.tail + 1) % self.capacity;
+            }
+
+            self.count += other.count;
+        }
+
         /// Return true if the all slots are available
         /// Return false if the ring buffer has at least 1 item within.
         pub fn isEmpty(self: *Self) bool {
@@ -328,4 +348,64 @@ test "concatenate" {
     var buf: [5]u32 = undefined;
     const n = a.dequeueMany(&buf);
     try testing.expectEqualSlices(u32, &.{ 1, 2, 3, 4, 5 }, buf[0..n]);
+}
+
+test "copy preserves other and copies all values in order" {
+    const allocator = testing.allocator;
+
+    var src = try RingBuffer(u8).init(allocator, 10);
+    defer src.deinit();
+
+    var dest = try RingBuffer(u8).init(allocator, 10);
+    defer dest.deinit();
+
+    // Fill the source buffer with predictable values
+    const values: [5]u8 = .{ 10, 20, 30, 40, 50 };
+    try testing.expectEqual(@as(u32, values.len), src.enqueueMany(&values));
+
+    // Ensure destination is empty before copy
+    try testing.expectEqual(true, dest.isEmpty());
+
+    // Perform the copy
+    try dest.copy(&src);
+
+    // Ensure source is unchanged after copy
+    try testing.expectEqual(@as(u32, values.len), src.count);
+
+    for (values) |expected| {
+        const actual = src.dequeue().?;
+        try testing.expectEqual(expected, actual);
+    }
+
+    // Re-enqueue the values into source for the next check
+    _ = src.enqueueMany(&values);
+
+    // Now check that dest has the same values, in same order
+    for (values) |expected| {
+        const actual = dest.dequeue().?;
+        try testing.expectEqual(expected, actual);
+    }
+
+    try testing.expectEqual(true, dest.isEmpty());
+    try testing.expectEqual(@as(u32, values.len), src.count);
+}
+
+test "copy fails when not enough space in destination" {
+    const allocator = testing.allocator;
+
+    var src = try RingBuffer(u8).init(allocator, 5);
+    defer src.deinit();
+
+    var dest = try RingBuffer(u8).init(allocator, 3);
+    defer dest.deinit();
+
+    // Fill source with 5 values
+    src.fill(7);
+
+    // Try copying into a smaller destination
+    const result = dest.copy(&src);
+    try testing.expectError(Error.BufferFull, result);
+
+    // Destination should still be empty
+    try testing.expectEqual(true, dest.isEmpty());
 }
