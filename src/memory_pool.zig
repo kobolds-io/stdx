@@ -36,7 +36,7 @@ pub fn MemoryPool(comptime T: type) type {
         /// The total capacity of the memory pool.
         ///
         /// The capacity helps in managing memory limits and optimizing the pool's memory usage.
-        capacity: u32,
+        capacity: usize,
 
         /// A ring buffer used to manage available memory blocks.
         ///
@@ -44,7 +44,7 @@ pub fn MemoryPool(comptime T: type) type {
         /// overhead of repeated memory allocations.
         free_list: RingBuffer(*T),
 
-        pub fn init(allocator: std.mem.Allocator, capacity: u32) !Self {
+        pub fn init(allocator: std.mem.Allocator, capacity: usize) !Self {
             assert(capacity > 0);
 
             var free_queue = try RingBuffer(*T).init(allocator, capacity);
@@ -83,12 +83,12 @@ pub fn MemoryPool(comptime T: type) type {
         }
 
         /// return the number assigned ptrs in the memory pool.
-        pub fn count(self: *Self) u32 {
+        pub fn count(self: *Self) usize {
             return self.assigned_map.count();
         }
 
         // return the number of free ptrs remaining in the memory pool.
-        pub fn available(self: *Self) u32 {
+        pub fn available(self: *Self) usize {
             return self.free_list.count;
         }
 
@@ -111,7 +111,7 @@ pub fn MemoryPool(comptime T: type) type {
         /// This function attempts to allocate `n` memory blocks from the pool. It will either
         /// reuse existing blocks from the free list or fail if the required number of blocks
         /// are not available.
-        pub fn createN(self: *Self, allocator: std.mem.Allocator, n: u32) ![]*T {
+        pub fn createN(self: *Self, allocator: std.mem.Allocator, n: usize) ![]*T {
             if (self.available() < n) return Error.OutOfMemory;
 
             var list = try std.ArrayList(*T).initCapacity(allocator, n);
@@ -147,13 +147,13 @@ pub fn MemoryPool(comptime T: type) type {
 test "init/deinit" {
     const allocator = testing.allocator;
 
-    var memory_pool = try MemoryPool(u32).init(allocator, 100);
+    var memory_pool = try MemoryPool(usize).init(allocator, 100);
     defer memory_pool.deinit();
 }
 
 test "create and destroy" {
     const TestStruct = struct {
-        data: u32 = 0,
+        data: usize = 0,
     };
 
     const allocator = testing.allocator;
