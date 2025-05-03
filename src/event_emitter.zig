@@ -14,7 +14,7 @@ pub fn EventEmitter(comptime Event: type, comptime Context: type, comptime Data:
 
         allocator: std.mem.Allocator,
         listeners: std.AutoHashMap(Event, *std.ArrayList(Listener)),
-        mutex: std.Thread.Mutex,
+        // mutex: std.Thread.Mutex,
 
         pub fn init(allocator: std.mem.Allocator) Self {
             return Self{
@@ -38,8 +38,8 @@ pub fn EventEmitter(comptime Event: type, comptime Context: type, comptime Data:
         }
 
         pub fn addEventListener(self: *Self, event: Event, context: Context, callback: ListenerCallback) !void {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            // self.mutex.lock();
+            // defer self.mutex.unlock();
 
             if (self.listeners.get(event)) |listeners_list| {
                 try listeners_list.append(.{ .context = context, .callback = callback });
@@ -58,8 +58,8 @@ pub fn EventEmitter(comptime Event: type, comptime Context: type, comptime Data:
         }
 
         pub fn removeEventListener(self: *Self, event: Event, callback: ListenerCallback) bool {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            // self.mutex.lock();
+            // defer self.mutex.unlock();
 
             if (self.listeners.get(event)) |listener_list| {
                 for (listener_list.items, 0..listener_list.items.len) |listener, i| {
@@ -74,8 +74,8 @@ pub fn EventEmitter(comptime Event: type, comptime Context: type, comptime Data:
         }
 
         pub fn emit(self: *Self, event: Event, data: Data) void {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            // self.mutex.lock();
+            // defer self.mutex.unlock();
 
             if (self.listeners.get(event)) |listener_list| {
                 for (listener_list.items) |listener| {
