@@ -27,7 +27,7 @@ pub fn ManagedQueue(comptime T: type) type {
         allocator: std.mem.Allocator,
         head: ?*Node,
         tail: ?*Node,
-        count: u32,
+        count: usize,
 
         pub fn init(allocator: std.mem.Allocator) Self {
             return Self{
