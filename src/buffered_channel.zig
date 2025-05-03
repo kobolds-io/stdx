@@ -4,9 +4,10 @@ const atomic = std.atomic;
 
 const assert = std.debug.assert;
 
+const CancellationToken = @import("./cancellation_token.zig").CancellationToken;
 const RingBuffer = @import("./ring_buffer.zig").RingBuffer;
 
-pub fn Channel(comptime T: type) type {
+pub fn BufferedChannel(comptime T: type) type {
     return struct {
         const Self = @This();
 
@@ -127,23 +128,10 @@ pub fn Channel(comptime T: type) type {
     };
 }
 
-pub const CancellationToken = struct {
-    const Self = @This();
-    cancelled: atomic.Value(bool) = atomic.Value(bool).init(false),
-
-    pub fn cancel(self: *Self) void {
-        self.cancelled.store(true, .seq_cst);
-    }
-
-    pub fn isCancelled(self: *Self) bool {
-        return self.cancelled.load(.seq_cst);
-    }
-};
-
 test "multi items" {
     const allocator = testing.allocator;
 
-    var channel = try Channel(usize).init(allocator, 10);
+    var channel = try BufferedChannel(usize).init(allocator, 10);
     defer channel.deinit();
 
     // multiple items can be buffered
@@ -163,12 +151,12 @@ test "multi items" {
 test "full behavior" {
     const allocator = testing.allocator;
 
-    var channel = try Channel(usize).init(allocator, 100);
+    var channel = try BufferedChannel(usize).init(allocator, 100);
     defer channel.deinit();
 
     // start a fast sender
     const fastSend = struct {
-        pub fn fastSend(chan: *Channel(usize), value: usize) void {
+        pub fn fastSend(chan: *BufferedChannel(usize), value: usize) void {
             // send 20 items, which is more than the capacity of the channel
             // we are relying on the slow receiver to pull items out of the channel
             // thus opening available slots for the new items
@@ -181,7 +169,7 @@ test "full behavior" {
 
     // start a slow thread
     const slowReceive = struct {
-        pub fn slowReceive(chan: *Channel(usize)) void {
+        pub fn slowReceive(chan: *BufferedChannel(usize)) void {
             var iters: usize = 0;
             while (!chan.isEmpty()) {
                 std.time.sleep(10 * std.time.ns_per_ms);
@@ -207,11 +195,11 @@ test "full behavior" {
 test "receive timeouts and cancellation" {
     const allocator = testing.allocator;
 
-    var channel = try Channel(usize).init(allocator, 100);
+    var channel = try BufferedChannel(usize).init(allocator, 100);
     defer channel.deinit();
 
     const receiver = struct {
-        pub fn do(running: *bool, chan: *Channel(usize), delay: i64, cancel_token: *CancellationToken) void {
+        pub fn do(running: *bool, chan: *BufferedChannel(usize), delay: i64, cancel_token: *CancellationToken) void {
             running.* = true;
             // ensure that the token is not cancelled before starting to wait
             assert(!cancel_token.isCancelled());
@@ -239,7 +227,7 @@ test "receive timeouts and cancellation" {
 test "send timeouts and cancellation" {
     const allocator = testing.allocator;
 
-    var channel = try Channel(usize).init(allocator, 10);
+    var channel = try BufferedChannel(usize).init(allocator, 10);
     defer channel.deinit();
 
     // fill the channel up
@@ -248,7 +236,7 @@ test "send timeouts and cancellation" {
     }
 
     const sender = struct {
-        pub fn do(running: *bool, chan: *Channel(usize), delay: i64, cancel_token: *CancellationToken) void {
+        pub fn do(running: *bool, chan: *BufferedChannel(usize), delay: i64, cancel_token: *CancellationToken) void {
             running.* = true;
             // ensure that the token is not cancelled before starting to wait
             assert(!cancel_token.isCancelled());

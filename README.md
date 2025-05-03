@@ -6,23 +6,7 @@ This is a library adding several generally useful tools that are either not incl
 
 All data structures, algorithms and utilities included in this library are written from scratch. This minimizes the threat of malicious or unintentional supply chain attacks. It also ensures that all code is controlled in a single place and HOPEFULLY minimizes the chance that `zig` turns into the hellish monstrocity that is `npm` and the `nodejs` ecosystem.
 
-# Table of Contents
-
-1. [Overview](#overview)
-   1. [Usage](#usage)
-   2. [Installation](#installation)
-   3. [Organization](#organization)
-   4. [Examples](#examples)
-   5. [Benchmarks](#benchmarks)
-   6. [Contributing](#contributing)
-   7. [Code of Conduct](#code-of-conduct)
-2. [Documentation](#documentation)
-   1. [stdx](#stdx)
-      1. [ManagedQueue](#managedqueue)
-      2. [MemoryPool](#memorypool)
-      3. [RingBuffer](#ringbuffer)
-      4. [UnmanagedQueue](#unmanagedqueue)
-      5. [IO](#io)
+[[_TOC_]]
 
 ## Usage
 
@@ -127,6 +111,18 @@ Please see the [Code of Conduct](./CODE_OF_CONDUCT.md) file. Simple library, sim
 ## stdx
 
 The `stdx` top level module. Directly contains data structures and is the parent module to modules like `io` and `net`.
+
+### BufferedChannel
+
+The `BufferedChannel` is a structure that can be used to safely transmit data across threads. It uses a backing buffer which stores the actual values transmitted. Additionally it has a very simple api `send`/`receive` and supports concepts like cancellation and timeouts.
+
+See [example](./examples/buffered_channel.zig) and [source](./src/buffered_channel.zig) for more information on usage.
+
+### UnbufferedChannel
+
+The `UnbufferedChannel` is a structure that can be used to safely transmit data across threads. It uses a `Condition` to notify receivers that there is new data. Additionally it has a very simple api `send`/`receive` and supports concepts like timeouts but does not currently support cancellation.
+
+See [example](./examples/unbuffered_channel.zig) and [source](./src/unbuffered_channel.zig) for more information on usage.
 
 ### ManagedQueue
 

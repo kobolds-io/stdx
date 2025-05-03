@@ -6,15 +6,15 @@ const assert = std.debug.assert;
 const constants = @import("./constants.zig");
 const testing = std.testing;
 
-const Channel = stdx.Channel;
+const BufferedChannel = stdx.BufferedChannel;
 
-const BenchmarkChannelSend = struct {
+const BenchmarkBufferedChannelSend = struct {
     const Self = @This();
 
     list: *std.ArrayList(usize),
-    channel: *Channel(usize),
+    channel: *BufferedChannel(usize),
 
-    fn new(list: *std.ArrayList(usize), channel: *Channel(usize)) Self {
+    fn new(list: *std.ArrayList(usize), channel: *BufferedChannel(usize)) Self {
         return .{
             .list = list,
             .channel = channel,
@@ -28,13 +28,13 @@ const BenchmarkChannelSend = struct {
     }
 };
 
-const BenchmarkChannelReceive = struct {
+const BenchmarkBufferedChannelReceive = struct {
     const Self = @This();
 
     list: *std.ArrayList(usize),
-    channel: *Channel(usize),
+    channel: *BufferedChannel(usize),
 
-    fn new(list: *std.ArrayList(usize), channel: *Channel(usize)) Self {
+    fn new(list: *std.ArrayList(usize), channel: *BufferedChannel(usize)) Self {
         return .{
             .list = list,
             .channel = channel,
@@ -48,8 +48,8 @@ const BenchmarkChannelReceive = struct {
     }
 };
 
-var send_channel: Channel(usize) = undefined;
-var receive_channel: Channel(usize) = undefined;
+var send_channel: BufferedChannel(usize) = undefined;
+var receive_channel: BufferedChannel(usize) = undefined;
 
 var data_list: std.ArrayList(usize) = undefined;
 const allocator = testing.allocator;
@@ -83,10 +83,10 @@ test "Channel benchmarks" {
         data_list.appendAssumeCapacity(i);
     }
 
-    send_channel = try Channel(usize).init(allocator, data_list.capacity);
+    send_channel = try BufferedChannel(usize).init(allocator, data_list.capacity);
     defer send_channel.deinit();
 
-    receive_channel = try Channel(usize).init(allocator, data_list.capacity);
+    receive_channel = try BufferedChannel(usize).init(allocator, data_list.capacity);
     defer receive_channel.deinit();
 
     const channel_send_title = try std.fmt.allocPrint(
@@ -105,7 +105,7 @@ test "Channel benchmarks" {
 
     try bench.addParam(
         channel_send_title,
-        &BenchmarkChannelSend.new(&data_list, &send_channel),
+        &BenchmarkBufferedChannelSend.new(&data_list, &send_channel),
         .{
             .hooks = .{
                 .before_each = beforeEachSend,
@@ -115,7 +115,7 @@ test "Channel benchmarks" {
 
     try bench.addParam(
         channel_receive_title,
-        &BenchmarkChannelReceive.new(&data_list, &receive_channel),
+        &BenchmarkBufferedChannelReceive.new(&data_list, &receive_channel),
         .{
             .hooks = .{
                 .before_each = beforeEachReceive,
@@ -126,8 +126,8 @@ test "Channel benchmarks" {
     // Write the results to stderr
     const stderr = std.io.getStdErr().writer();
     try stderr.writeAll("\n");
-    try stderr.writeAll("|--------------------------|\n");
-    try stderr.writeAll("| Channel Benchmarks |\n");
-    try stderr.writeAll("|--------------------------|\n");
+    try stderr.writeAll("|-----------------------------|\n");
+    try stderr.writeAll("| Buffered Channel Benchmarks |\n");
+    try stderr.writeAll("|-----------------------------|\n");
     try bench.run(stderr);
 }

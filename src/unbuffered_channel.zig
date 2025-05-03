@@ -6,7 +6,7 @@ const assert = std.debug.assert;
 /// threads for syncing operations or to ensure that a thread has completed a task.
 /// This channel is able to send multiple values to the receiver but can only hold a
 /// single value.
-pub fn SimpleChannel(comptime T: type) type {
+pub fn UnbufferedChannel(comptime T: type) type {
     return struct {
         const Self = @This();
 
@@ -75,14 +75,14 @@ pub fn SimpleChannel(comptime T: type) type {
 
 test "good behavior" {
     const testerFn = struct {
-        fn run(channel: *SimpleChannel(u32), value: u32) void {
+        fn run(channel: *UnbufferedChannel(u32), value: u32) void {
             channel.send(value);
         }
     }.run;
 
     const want: u32 = 123;
 
-    var channel = SimpleChannel(u32).init();
+    var channel = UnbufferedChannel(u32).init();
     const th = try std.Thread.spawn(.{}, testerFn, .{ &channel, want });
     defer th.join();
 
@@ -93,14 +93,14 @@ test "good behavior" {
 
 test "bad behavior" {
     const testerFn = struct {
-        fn run(channel: *SimpleChannel(u32), value: u32) void {
+        fn run(channel: *UnbufferedChannel(u32), value: u32) void {
             // exceeds the allowed timeout value for channel receive
             std.time.sleep(5 * std.time.ns_per_ms);
             channel.send(value);
         }
     }.run;
 
-    var channel = SimpleChannel(u32).init();
+    var channel = UnbufferedChannel(u32).init();
     const th = try std.Thread.spawn(.{}, testerFn, .{ &channel, 9999 });
     defer th.join();
 
@@ -109,14 +109,14 @@ test "bad behavior" {
 
 test "receive multiple values" {
     const testerFn = struct {
-        fn run(channel: *SimpleChannel(u32)) void {
+        fn run(channel: *UnbufferedChannel(u32)) void {
             channel.send(1);
             channel.send(2);
             channel.send(3);
         }
     }.run;
 
-    var channel = SimpleChannel(u32).init();
+    var channel = UnbufferedChannel(u32).init();
     const th = try std.Thread.spawn(.{}, testerFn, .{&channel});
     defer th.join();
 

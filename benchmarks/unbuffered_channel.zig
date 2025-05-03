@@ -6,15 +6,15 @@ const assert = std.debug.assert;
 const constants = @import("./constants.zig");
 const testing = std.testing;
 
-const SimpleChannel = stdx.SimpleChannel;
+const UnbufferedChannel = stdx.UnbufferedChannel;
 
-const BenchmarkSimpleChannelSendReceive = struct {
+const BenchmarkUnbufferedChannelSendReceive = struct {
     const Self = @This();
 
     list: *std.ArrayList(usize),
-    channel: *SimpleChannel(usize),
+    channel: *UnbufferedChannel(usize),
 
-    fn new(list: *std.ArrayList(usize), channel: *SimpleChannel(usize)) Self {
+    fn new(list: *std.ArrayList(usize), channel: *UnbufferedChannel(usize)) Self {
         return .{
             .list = list,
             .channel = channel,
@@ -30,7 +30,7 @@ const BenchmarkSimpleChannelSendReceive = struct {
     }
 };
 
-var simple_channel: SimpleChannel(usize) = undefined;
+var simple_channel: UnbufferedChannel(usize) = undefined;
 
 var data_list: std.ArrayList(usize) = undefined;
 const allocator = testing.allocator;
@@ -64,15 +64,15 @@ test "SimpleChannel benchmarks" {
     // register all the benchmark tests
     try bench.addParam(
         simple_channel_send_receive_title,
-        &BenchmarkSimpleChannelSendReceive.new(&data_list, &simple_channel),
+        &BenchmarkUnbufferedChannelSendReceive.new(&data_list, &simple_channel),
         .{},
     );
 
     // Write the results to stderr
     const stderr = std.io.getStdErr().writer();
     try stderr.writeAll("\n");
-    try stderr.writeAll("|--------------------------|\n");
-    try stderr.writeAll("| SimpleChannel Benchmarks |\n");
-    try stderr.writeAll("|--------------------------|\n");
+    try stderr.writeAll("|------------------------------|\n");
+    try stderr.writeAll("| UnbufferedChannel Benchmarks |\n");
+    try stderr.writeAll("|------------------------------|\n");
     try bench.run(stderr);
 }
