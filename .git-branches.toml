@@ -1,8 +1,8 @@
 # More info around this file at https://www.git-town.com/configuration-file
 
 [branches]
-main = "develop"
-perennials = ["main"]
+main = "main"
+perennials = []
 perennial-regex = ""
 
 [create]
