@@ -37,8 +37,8 @@ You can install `stdx` just like any other `zig` dependency by editing your `bui
     .dependencies = .{
         .stdx = .{
             // the latest version of the library is v0.0.2
-            .url = "https://github.com/kobolds-io/stdx/archive/refs/tags/v0.0.2.tar.gz",
-            .hash = "stdx-0.0.2-nyLNAQrfAABlq4y4DXa5Y_exfKnhRiS_-YRz-0Fbv9L2",
+            .url = "https://github.com/kobolds-io/stdx/archive/refs/tags/v0.0.3.tar.gz",
+            .hash = "",
         },
     },
 ```
@@ -116,7 +116,7 @@ The `stdx` top level module. Directly contains data structures and is the parent
 
 #### BufferedChannel
 
-> unreleased
+> added v0.0.3
 
 The `BufferedChannel` is a structure that can be used to safely transmit data across threads. It uses a backing buffer which stores the actual values transmitted. Additionally it has a very simple api `send`/`receive` and supports concepts like cancellation and timeouts.
 
@@ -124,7 +124,7 @@ See [example](./examples/buffered_channel.zig) and [source](./src/buffered_chann
 
 #### UnbufferedChannel (unreleased)
 
-> unreleased
+> added v0.0.3
 
 The `UnbufferedChannel` is a structure that can be used to safely transmit data across threads. It uses a `Condition` to notify receivers that there is new data. Additionally it has a very simple api `send`/`receive` and supports concepts like timeouts but does not currently support cancellation.
 
