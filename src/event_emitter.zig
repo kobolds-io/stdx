@@ -20,7 +20,7 @@ pub fn EventEmitter(comptime Event: type, comptime Context: type, comptime Data:
             return Self{
                 .allocator = allocator,
                 .listeners = std.AutoHashMap(Event, *std.ArrayList(Listener)).init(allocator),
-                .mutex = std.Thread.Mutex{},
+                // .mutex = std.Thread.Mutex{},
             };
         }
 
