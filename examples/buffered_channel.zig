@@ -168,6 +168,5 @@ pub fn main() !void {
     defer upload_manager.deinit();
 
     // Change the second argument to change the global timeout
-
     try upload_manager.run(100, 3_000);
 }

@@ -15,8 +15,13 @@ pub fn UnbufferedChannel(comptime T: type) type {
         value: T = undefined,
         has_value: bool = false,
 
-        pub fn init() Self {
-            return .{};
+        pub fn new() Self {
+            return .{
+                .condition = .{},
+                .mutex = .{},
+                .value = undefined,
+                .has_value = false,
+            };
         }
 
         /// Send a value to the receiver.
@@ -82,7 +87,7 @@ test "good behavior" {
 
     const want: u32 = 123;
 
-    var channel = UnbufferedChannel(u32).init();
+    var channel = UnbufferedChannel(u32).new();
     const th = try std.Thread.spawn(.{}, testerFn, .{ &channel, want });
     defer th.join();
 
@@ -100,7 +105,7 @@ test "bad behavior" {
         }
     }.run;
 
-    var channel = UnbufferedChannel(u32).init();
+    var channel = UnbufferedChannel(u32).new();
     const th = try std.Thread.spawn(.{}, testerFn, .{ &channel, 9999 });
     defer th.join();
 
@@ -116,7 +121,7 @@ test "receive multiple values" {
         }
     }.run;
 
-    var channel = UnbufferedChannel(u32).init();
+    var channel = UnbufferedChannel(u32).new();
     const th = try std.Thread.spawn(.{}, testerFn, .{&channel});
     defer th.join();
 

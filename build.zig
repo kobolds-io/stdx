@@ -56,6 +56,7 @@ fn setupExamples(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.
     const example_step = b.step("examples", "Build examples");
     const example_names = [_][]const u8{
         "buffered_channel",
+        "unbuffered_channel",
         "managed_queue",
         "memory_pool",
         "ring_buffer",
