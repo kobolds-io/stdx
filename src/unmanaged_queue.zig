@@ -47,7 +47,7 @@ pub fn UnmanagedQueue(comptime T: type) type {
         tail: ?*Node(T),
         /// Property that tracks how many nodes are in the queue. This value is incremented/decremented as
         /// nodes are added or removed. Users should not directly modify this parameter.
-        count: u32,
+        count: usize,
 
         pub fn new() Self {
             return Self{
