@@ -47,7 +47,7 @@ run `zig build --fetch` to fetch the dependencies. Sometimes `zig` is helpful an
 
 ## Organization
 
-This library follows the organization of the `zig` `std` library. You will see familiar hierarchies like `stdx.mem` for memory stuff and `std.RingBuffer` for other data structures. As I build this library out, I'll add more notes and documentation.
+This library follows the organization of the `zig` `std` library. You will see familiar hierarchies like `stdx.mem` for memory stuff and `std.<DATA_STRUCTURE>` for other data structures. As I build this library out, I'll add more notes and documentation.
 
 ## Examples
 
@@ -122,7 +122,7 @@ The `BufferedChannel` is a structure that can be used to safely transmit data ac
 
 See [example](./examples/buffered_channel.zig) and [source](./src/buffered_channel.zig) for more information on usage.
 
-#### UnbufferedChannel (unreleased)
+#### UnbufferedChannel
 
 > added v0.0.3
 
