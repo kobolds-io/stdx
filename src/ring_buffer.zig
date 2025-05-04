@@ -136,6 +136,28 @@ pub fn RingBuffer(comptime T: type) type {
             other.reset();
         }
 
+        /// Concatenate as many items as possible from another ring buffer into this one.
+        ///
+        /// This method appends up to `self.available()` elements from the `other` ring buffer
+        /// into `self`, preserving the order of items as they appeared in `other`.
+        /// Only the number of items that can fit in `self` will be copied.
+        /// The operation is destructive to `other`—copied items are removed from it.
+        pub fn concatenateAvailable(self: *Self, other: *Self) void {
+            const num_to_copy = @min(self.available(), other.count);
+
+            var i: usize = 0;
+            while (i < num_to_copy) : (i += 1) {
+                const index = (other.head + i) % other.capacity;
+                const value = other.buffer[index];
+                self.buffer[self.tail] = value;
+                self.tail = (self.tail + 1) % self.capacity;
+            }
+
+            self.count += num_to_copy;
+            other.head = (other.head + num_to_copy) % other.capacity;
+            other.count -= num_to_copy;
+        }
+
         /// Copy the contents of another ring buffer into this one while preserving
         /// the contents in the `other` ring buffer.
         ///
