@@ -52,11 +52,11 @@ pub fn BufferedChannel(comptime T: type) type {
             return value;
         }
 
-        pub fn trySend(self: *Self, value: T, delay_us: i64, cancel: ?*CancellationToken) !void {
+        pub fn trySend(self: *Self, value: T, timeout_us: i64, cancel: ?*CancellationToken) !void {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            const deadline = std.time.microTimestamp() + delay_us;
+            const deadline = std.time.microTimestamp() + timeout_us;
 
             while (self.buffer.isFull()) {
                 if (cancel) |token| {
@@ -75,11 +75,11 @@ pub fn BufferedChannel(comptime T: type) type {
             self.not_empty.signal();
         }
 
-        pub fn tryReceive(self: *Self, delay_us: i64, cancel: ?*CancellationToken) !T {
+        pub fn tryReceive(self: *Self, timeout_us: i64, cancel: ?*CancellationToken) !T {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            const deadline = std.time.microTimestamp() + delay_us;
+            const deadline = std.time.microTimestamp() + timeout_us;
 
             while (self.buffer.isEmpty()) {
                 if (cancel) |token| {
@@ -94,9 +94,15 @@ pub fn BufferedChannel(comptime T: type) type {
                 };
             }
 
-            const value = self.buffer.dequeue().?;
-            self.not_full.signal();
-            return value;
+            if (self.buffer.dequeue()) |value| {
+                self.not_full.signal();
+                return value;
+            }
+
+            return error.SyncError;
+
+            // const value = self.buffer.dequeue().?;
+            // return value;
         }
 
         pub fn count(self: Self) usize {
