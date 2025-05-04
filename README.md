@@ -41,7 +41,7 @@ fn main() !void {
     // your code
     // ....
 
-    const memory_pool = stdx.MemoryPool(i32).init(allocator, 200);
+    const memory_pool = try stdx.MemoryPool(i32).init(allocator, 200);
     defer memory_pool.deinit();
 
     // your code
