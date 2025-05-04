@@ -10,12 +10,13 @@ const log = std.log.scoped(.MPSCExample);
 
 // This is the type that will be processed
 const VALUE_TYPE: type = usize;
-const TOPIC_QUEUE_SIZE: usize = 50_000;
-const PUBLISHER_QUEUE_SIZE: usize = 5_000;
-const SUBSCRIBER_QUEUE_SIZE: usize = 5_000;
-const ITERATIONS = 10_000_000;
-const SUBSCRIBER_COUNT = 50;
-const PUBLISHER_COUNT = 1;
+const TOPIC_QUEUE_SIZE = 50_000;
+const PUBLISHER_QUEUE_SIZE = 5_000;
+const SUBSCRIBER_QUEUE_SIZE = 5_000;
+const ITERATIONS = 100_000;
+const SUBSCRIBER_COUNT = 5;
+const PUBLISHER_COUNT = 3;
+const PUBLISHER_BACKPRESSURE_MAX_CAPACITY = PUBLISHER_QUEUE_SIZE * 10;
 
 pub fn Topic(comptime T: type) type {
     return struct {
@@ -89,6 +90,13 @@ pub fn Publisher(comptime T: type) type {
             defer self.mutex.unlock();
 
             self.queue.enqueue(value) catch {
+                if (self.backpressure.items.len + 1 == PUBLISHER_BACKPRESSURE_MAX_CAPACITY) {
+                    log.err("Publisher: {} PUBLISHER_BACKPRESSURE_MAX_CAPACITY reached: {}", .{
+                        self.id,
+                        PUBLISHER_BACKPRESSURE_MAX_CAPACITY,
+                    });
+                    return error.BackpressureMaxCapacity;
+                }
                 try self.backpressure.append(value);
                 // log.err("publisher: {} adding value to backpressure", .{self.id});
                 return;
@@ -113,12 +121,9 @@ pub fn Publisher(comptime T: type) type {
                 std.mem.copyForwards(VALUE_TYPE, self.backpressure.items, self.backpressure.items[n..]);
                 self.backpressure.items.len -= n;
                 self.published_count += @intCast(n);
-                // log.err("self.backpressure.items.len {}, n {}", .{ self.backpressure.items.len, n });
-                // log.err("published count {}", .{self.published_count});
             }
 
             self.topic.queue.concatenateAvailable(self.queue);
-            // log.debug("publisher: {} self.queue.count {}", .{ self.id, self.queue.count });
         }
 
         pub fn run(self: *Self, ready: *UnbufferedChannel(bool)) void {
@@ -127,8 +132,8 @@ pub fn Publisher(comptime T: type) type {
                 // check if we have received a signale to close the topic
                 const signal = self.close_channel.timedReceive(0) catch false;
                 if (signal) {
-                    log.info("signal received to stop publisher {}", .{self.id});
-                    log.debug("publisher {}: published {} items", .{ self.id, self.published_count });
+                    // log.info("signal received to stop publisher {}", .{self.id});
+                    // log.debug("publisher {}: published {} items", .{ self.id, self.published_count });
                     return;
                 }
 
@@ -192,8 +197,8 @@ pub fn Subscriber(comptime T: type) type {
                 // check if we have received a signale to close the topic
                 const signal = self.close_channel.timedReceive(0) catch false;
                 if (signal) {
-                    log.err("signal received to stop subscriber {}", .{self.id});
-                    log.err("subscriber {}: processed {} items", .{ self.id, self.processed_count });
+                    // log.err("signal received to stop subscriber {}", .{self.id});
+                    // log.err("subscriber {}: processed {} items", .{ self.id, self.processed_count });
                     return;
                 }
 
@@ -273,7 +278,11 @@ pub fn main() !void {
 
     for (0..ITERATIONS) |_| {
         for (publishers.items) |publisher| {
-            try publisher.publish(publisher.id);
+            publisher.publish(publisher.id) catch {
+                log.err("publisher: {} throttling", .{publisher.id});
+                std.time.sleep(100 * std.time.ns_per_ms);
+                try publisher.publish(publisher.id);
+            };
         }
     }
 
@@ -312,10 +321,12 @@ pub fn main() !void {
     });
 
     for (publishers.items) |publisher| {
+        log.err("publisher {} published {}", .{ publisher.id, publisher.published_count });
         publisher.close();
     }
 
     for (subscribers.items) |subscriber| {
+        log.err("subscriber {} processed {}", .{ subscriber.id, subscriber.processed_count });
         subscriber.close();
     }
 
