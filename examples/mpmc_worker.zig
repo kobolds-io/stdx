@@ -11,23 +11,21 @@ const log = std.log.scoped(.MPSCExample);
 const Dog = struct {
     name: []const u8,
     age: u8,
-    large_thing: [4096 * 2]u8,
 };
 
 const sardine = Dog{
     .name = "sardine",
     .age = 4,
-    .large_thing = undefined,
 };
 
 // This is the type that will be processed
 const VALUE_TYPE: type = *const Dog;
-const TOPIC_QUEUE_SIZE = 10_000;
-const PRODUCER_QUEUE_SIZE = 5_000;
-const WORKER_QUEUE_SIZE = 5_000;
+const TOPIC_QUEUE_SIZE = 30_000;
+const PRODUCER_QUEUE_SIZE = 10_000;
+const WORKER_QUEUE_SIZE = 10_000;
 const ITERATIONS = 1_000_000;
-const WORKER_COUNT = 100;
-const PRODUCER_COUNT = 100;
+const WORKER_COUNT = 10;
+const PRODUCER_COUNT = 1;
 const PRODUCER_BACKPRESSURE_MAX_CAPACITY = PRODUCER_QUEUE_SIZE * 10;
 
 pub fn Topic(comptime T: type) type {
