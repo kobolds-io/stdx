@@ -99,7 +99,6 @@ pub fn Producer(comptime T: type) type {
                     return error.BackpressureMaxCapacity;
                 }
                 try self.backpressure.append(value);
-                // log.err("producer: {} adding value to backpressure", .{self.id});
                 return;
             };
 
@@ -332,6 +331,4 @@ pub fn main() !void {
     }
 
     assert(processed_count == produced_count);
-
-    std.time.sleep(100 * std.time.ns_per_ms);
 }
