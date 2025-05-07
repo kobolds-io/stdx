@@ -6,7 +6,7 @@ const BufferedChannel = stdx.BufferedChannel;
 const UnbufferedChannel = stdx.UnbufferedChannel;
 const CancellationToken = stdx.CancellationToken;
 const RingBuffer = stdx.RingBuffer;
-const log = std.log.scoped(.MPSCExample);
+const log = std.log.scoped(.MPSCQueueExample);
 
 const Dog = struct {
     name: []const u8,
@@ -20,7 +20,7 @@ const sardine = Dog{
 
 // This is the type that will be processed
 const VALUE_TYPE: type = *const Dog;
-const TOPIC_QUEUE_SIZE = 30_000;
+const TOPIC_QUEUE_SIZE = 50_000;
 const PRODUCER_QUEUE_SIZE = 10_000;
 const WORKER_QUEUE_SIZE = 10_000;
 const ITERATIONS = 1_000_000;
