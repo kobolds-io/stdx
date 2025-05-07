@@ -382,18 +382,6 @@ pub fn main() !void {
         defer bus.mutex.unlock();
 
         try bus.producers.append(producer);
-
-        // var ready_channel = UnbufferedChannel(bool).new();
-        //
-        // const producer_thread = try std.Thread.spawn(
-        //     .{},
-        //     Producer(VALUE_TYPE).run,
-        //     .{ producer, &ready_channel },
-        // );
-        // producer_thread.detach();
-        //
-        // _ = ready_channel.receive();
-        // errdefer producer.close();
     }
 
     // spawn all the consumers
