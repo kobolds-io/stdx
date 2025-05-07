@@ -232,12 +232,13 @@ pub fn Consumer(comptime T: type) type {
         }
 
         pub fn tick(self: *Self) !void {
-            // check if there are items that need to be processed
             if (self.queue.count == 0) return;
 
             self.mutex.lock();
             defer self.mutex.unlock();
 
+            // FIX: this is just some BS where the consumer is dropping the items and not
+            // actually doing any work. This is an example so don't look to deeply into it.
             self.consumed_count += self.queue.count;
             self.queue.reset();
         }
@@ -267,15 +268,13 @@ pub fn Producer(comptime T: type) type {
         const Self = @This();
 
         allocator: std.mem.Allocator,
-        backpressure: std.ArrayList(VALUE_TYPE),
         close_channel: UnbufferedChannel(bool),
         id: usize,
         mutex: std.Thread.Mutex,
         produced_count: u128,
         queue: *RingBuffer(T),
-        bus: *Bus(T),
 
-        pub fn init(allocator: std.mem.Allocator, id: usize, bus: *Bus(T)) !Self {
+        pub fn init(allocator: std.mem.Allocator, id: usize) !Self {
             const queue = try allocator.create(RingBuffer(T));
             errdefer allocator.destroy(queue);
 
@@ -284,18 +283,15 @@ pub fn Producer(comptime T: type) type {
 
             return Self{
                 .allocator = allocator,
-                .backpressure = std.ArrayList(VALUE_TYPE).init(allocator),
                 .close_channel = UnbufferedChannel(bool).new(),
                 .id = id,
                 .mutex = .{},
                 .produced_count = 0,
                 .queue = queue,
-                .bus = bus,
             };
         }
 
         pub fn deinit(self: *Self) void {
-            self.backpressure.deinit();
             self.queue.deinit();
             self.allocator.destroy(self.queue);
         }
@@ -372,7 +368,7 @@ pub fn main() !void {
         const producer = try allocator.create(Producer(VALUE_TYPE));
         errdefer allocator.destroy(producer);
 
-        producer.* = try Producer(VALUE_TYPE).init(allocator, i, &bus);
+        producer.* = try Producer(VALUE_TYPE).init(allocator, i);
         errdefer producer.deinit();
 
         try producers.append(producer);
