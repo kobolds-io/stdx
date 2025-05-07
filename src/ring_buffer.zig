@@ -178,6 +178,93 @@ pub fn RingBuffer(comptime T: type) type {
             self.count += other.count;
         }
 
+        /// Copies the minimum number of available items from `self` to all `others`.
+        ///
+        /// The number of items copied is the minimum of:
+        /// - the number of items currently in `self`
+        /// - the available space in each target buffer (smallest available among them)
+        ///
+        /// All target buffers receive the same copied items. The copied items are removed from `self`.
+        /// Returns the number of items successfully copied.
+        pub fn copyMinToOthers(self: *Self, others: []*Self) usize {
+            if (others.len == 0 or self.count == 0) return 0;
+
+            // Find the smallest available space among all receivers
+            var min_available = std.math.maxInt(usize);
+            for (others) |other| {
+                const other_available = other.available();
+                if (other_available < min_available) {
+                    min_available = other_available;
+                }
+            }
+
+            const num_to_copy = @min(self.count, min_available);
+            if (num_to_copy == 0) return 0;
+
+            // Copy items from self to each other
+            var i: usize = 0;
+            while (i < num_to_copy) : (i += 1) {
+                const index = (self.head + i) % self.capacity;
+                const value = self.buffer[index];
+
+                for (others) |other| {
+                    other.buffer[other.tail] = value;
+                    other.tail = (other.tail + 1) % other.capacity;
+                    other.count += 1;
+                }
+            }
+
+            // Advance self
+            self.head = (self.head + num_to_copy) % self.capacity;
+            self.count -= num_to_copy;
+
+            return num_to_copy;
+        }
+
+        /// Copies as many items as possible from `self` to all `others`.
+        ///
+        /// The number of items copied is the maximum number such that:
+        /// - each target buffer can accommodate that many items
+        /// - self has at least that many items
+        ///
+        /// All target buffers receive the same copied items.
+        /// The copied items are removed from `self`.
+        /// Returns the number of items copied to each target.
+        pub fn copyMaxToOthers(self: *Self, others: []*Self) usize {
+            if (others.len == 0 or self.count == 0) return 0;
+
+            // Determine how many items each other buffer can accept
+            var max_copy = self.count;
+
+            for (others) |other| {
+                const other_available = other.available();
+                if (other_available < max_copy) {
+                    max_copy = other_available;
+                }
+            }
+
+            if (max_copy == 0) return 0;
+
+            // Copy items from self to each other
+            var i: usize = 0;
+            while (i < max_copy) : (i += 1) {
+                const index = (self.head + i) % self.capacity;
+                const value = self.buffer[index];
+
+                for (others) |other| {
+                    other.buffer[other.tail] = value;
+                    other.tail = (other.tail + 1) % other.capacity;
+                    other.count += 1;
+                }
+            }
+
+            // Advance self
+            self.head = (self.head + max_copy) % self.capacity;
+            self.count -= max_copy;
+
+            return max_copy;
+        }
+
         /// Return true if the all slots are available
         /// Return false if the ring buffer has at least 1 item within.
         pub fn isEmpty(self: *Self) bool {
