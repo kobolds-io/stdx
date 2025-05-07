@@ -26,7 +26,6 @@ const CONSUMER_QUEUE_SIZE = 5_000;
 const ITERATIONS = 10_000;
 const CONSUMER_COUNT = 100;
 const PRODUCER_COUNT = 1;
-const PRODUCER_BACKPRESSURE_MAX_CAPACITY = PRODUCER_QUEUE_SIZE * 10;
 
 pub fn doProduce(
     producers: *std.ArrayList(*Producer(VALUE_TYPE)),
