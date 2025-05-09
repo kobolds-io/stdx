@@ -44,6 +44,9 @@ pub fn MemoryPool(comptime T: type) type {
         /// overhead of repeated memory allocations.
         free_list: RingBuffer(*T),
 
+        /// A mutex used for thread safe operations
+        mutex: std.Thread.Mutex,
+
         pub fn init(allocator: std.mem.Allocator, capacity: usize) !Self {
             assert(capacity > 0);
 
@@ -92,11 +95,19 @@ pub fn MemoryPool(comptime T: type) type {
             return self.free_list.count;
         }
 
-        /// Allocates a memory block from the memory pool.
+        /// Allocates a memory block from the memory pool. Threadsafe
         ///
         /// This function attempts to allocate a memory block from the pool by either
         /// reusing an existing block from the free list or failing if no memory is available.
         pub fn create(self: *Self) !*T {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+
+            return self.unsafeCreate();
+        }
+
+        /// Non thread safe version of `create`
+        pub fn unsafeCreate(self: *Self) !*T {
             if (self.available() == 0) return Error.OutOfMemory;
 
             if (self.free_list.dequeue()) |ptr| {
@@ -106,12 +117,20 @@ pub fn MemoryPool(comptime T: type) type {
             } else unreachable;
         }
 
-        /// Allocates multiple memory blocks from the memory pool.
+        /// Allocates multiple memory blocks from the memory pool. Thread safe
         ///
         /// This function attempts to allocate `n` memory blocks from the pool. It will either
         /// reuse existing blocks from the free list or fail if the required number of blocks
         /// are not available.
         pub fn createN(self: *Self, allocator: std.mem.Allocator, n: usize) ![]*T {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+
+            return self.unsafeCreateN(allocator, n);
+        }
+
+        /// Unsafe version of `createN`.
+        pub fn unsafeCreateN(self: *Self, allocator: std.mem.Allocator, n: usize) ![]*T {
             if (self.available() < n) return Error.OutOfMemory;
 
             var list = try std.ArrayList(*T).initCapacity(allocator, n);
@@ -127,12 +146,20 @@ pub fn MemoryPool(comptime T: type) type {
             return list.toOwnedSlice();
         }
 
-        /// Frees a memory block and returns it to the pool.
+        /// Frees a memory block and returns it to the pool. Thread safe
         ///
         /// This function takes a pointer to a memory block previously allocated from the pool,
         /// removes it from the `assigned_map` to mark it as no longer in use, and then enqueues
         /// it back into the `free_list` for reuse.
         pub fn destroy(self: *Self, ptr: *T) void {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+
+            return self.unsafeDestroy(ptr);
+        }
+
+        /// Unsafe version of `destroy`
+        pub fn unsafeDestroy(self: *Self, ptr: *T) void {
             const res = self.assigned_map.remove(ptr);
             if (!res) {
                 log.err("ptr did not exist in pool {*}", .{ptr});
