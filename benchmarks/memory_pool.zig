@@ -75,7 +75,6 @@ fn beforeEachUnsafeCreate() void {
 test "MemoryPool benchmarks" {
     var bench = zbench.Benchmark.init(
         std.testing.allocator,
-        // .{ .iterations = 1 },
         .{ .iterations = constants.benchmark_max_iterations },
     );
     defer bench.deinit();
