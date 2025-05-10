@@ -126,8 +126,8 @@ test "Channel benchmarks" {
     // Write the results to stderr
     const stderr = std.io.getStdErr().writer();
     try stderr.writeAll("\n");
-    try stderr.writeAll("|-----------------------------|\n");
-    try stderr.writeAll("| Buffered Channel Benchmarks |\n");
-    try stderr.writeAll("|-----------------------------|\n");
+    try stderr.writeAll("|----------------------------|\n");
+    try stderr.writeAll("| BufferedChannel Benchmarks |\n");
+    try stderr.writeAll("|----------------------------|\n");
     try bench.run(stderr);
 }
