@@ -76,6 +76,7 @@ pub fn MemoryPool(comptime T: type) type {
                 .capacity = capacity,
                 .free_list = free_queue,
                 .backing_buffer = backing_buffer,
+                .mutex = std.Thread.Mutex{},
             };
         }
 
@@ -185,36 +186,36 @@ test "create and destroy" {
 
     const allocator = testing.allocator;
 
-    var memory_pool = try MemoryPool(TestStruct).init(allocator, 100);
-    defer memory_pool.deinit();
+    var memory_pool_create = try MemoryPool(TestStruct).init(allocator, 100);
+    defer memory_pool_create.deinit();
 
     // create an ArrayList that will hold some pointers to be destroyed later
     var ptrs = std.ArrayList(*TestStruct).init(allocator);
     defer ptrs.deinit();
 
     // fill the entire memory pool
-    for (0..memory_pool.available()) |i| {
-        const p = try memory_pool.create();
+    for (0..memory_pool_create.available()) |i| {
+        const p = try memory_pool_create.create();
         p.* = .{ .data = @intCast(i) };
 
         try ptrs.append(p);
     }
 
-    try testing.expectEqual(0, memory_pool.available());
-    try testing.expectError(Error.OutOfMemory, memory_pool.create());
+    try testing.expectEqual(0, memory_pool_create.available());
+    try testing.expectError(Error.OutOfMemory, memory_pool_create.create());
 
     // remove one of the created items
     const removed_ptr = ptrs.pop().?;
-    memory_pool.destroy(removed_ptr);
+    memory_pool_create.destroy(removed_ptr);
 
-    try testing.expectEqual(1, memory_pool.available());
+    try testing.expectEqual(1, memory_pool_create.available());
 
     // remove the rest of the items
     while (ptrs.pop()) |ptr| {
-        memory_pool.destroy(ptr);
+        memory_pool_create.destroy(ptr);
     }
 
-    try testing.expectEqual(memory_pool.capacity, memory_pool.available());
+    try testing.expectEqual(memory_pool_create.capacity, memory_pool_create.available());
 }
 
 test "data types" {
