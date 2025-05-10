@@ -11,5 +11,6 @@ test "prints system info" {
 comptime {
     _ = @import("buffered_channel.zig");
     _ = @import("unbuffered_channel.zig");
+    _ = @import("memory_pool.zig");
     _ = @import("ring_buffer.zig");
 }
