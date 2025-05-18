@@ -1,27 +1,16 @@
 const std = @import("std");
 const testing = std.testing;
-
-// const Event = enum {
-//     Started,
-//     Stopped,
-//     Message,
-// };
-//
-// const EventData = union(Event) {
-//     Started: void,
-//     Stopped: i32,
-//     Message: []const u8,
-// };
+const assert = std.debug.assert;
 
 pub fn EventEmitter(
     comptime Event: type,
     comptime Context: type,
-    comptime EventData: type,
+    comptime Data: type,
 ) type {
     return struct {
         const Self = @This();
 
-        pub const ListenerCallback = *const fn (event: Event, context: Context, data: EventData) void;
+        pub const ListenerCallback = *const fn (context: Context, event: Event, data: Data) void;
 
         pub const Listener = struct {
             context: Context,
@@ -51,10 +40,7 @@ pub fn EventEmitter(
             self.listeners.deinit();
         }
 
-        pub fn addEventListener(self: *Self, event: Event, context: Context, callback: ListenerCallback) !void {
-            // self.mutex.lock();
-            // defer self.mutex.unlock();
-
+        pub fn addEventListener(self: *Self, context: Context, event: Event, callback: ListenerCallback) !void {
             if (self.listeners.get(event)) |listeners_list| {
                 try listeners_list.append(.{ .context = context, .callback = callback });
             } else {
@@ -71,13 +57,10 @@ pub fn EventEmitter(
             }
         }
 
-        pub fn removeEventListener(self: *Self, event: Event, callback: ListenerCallback) bool {
-            // self.mutex.lock();
-            // defer self.mutex.unlock();
-
+        pub fn removeEventListener(self: *Self, context: Context, event: Event, callback: ListenerCallback) bool {
             if (self.listeners.get(event)) |listener_list| {
                 for (listener_list.items, 0..listener_list.items.len) |listener, i| {
-                    if (listener.callback == callback) {
+                    if (listener.callback == callback and listener.context == context) {
                         _ = listener_list.swapRemove(i);
                         return true;
                     }
@@ -87,28 +70,57 @@ pub fn EventEmitter(
             return false;
         }
 
-        pub fn emit(self: *Self, data: EventData) void {
-            const event = @as(Event, data);
+        pub fn emit(self: *Self, event: Event, data: Data) void {
             if (self.listeners.get(event)) |listener_list| {
                 for (listener_list.items) |listener| {
-                    listener.callback(event, listener.context, data);
+                    listener.callback(listener.context, event, data);
                 }
             }
         }
     };
 }
 
-const TestEnum = enum {
+const TestEvent = enum {
     data_sent,
     data_received,
+};
+
+const TestContext = struct {
+    const Self = @This();
+    data: u32,
+
+    pub fn onDataSent(self: *Self, event: TestEvent, data: u32) void {
+        assert(event == .data_sent);
+
+        self.data = data;
+    }
 };
 
 test "init/deinit" {
     const allocator = testing.allocator;
 
-    var ee = EventEmitter(TestEnum).init(allocator);
+    var ee = EventEmitter(TestEvent, *TestContext, u32).init(allocator);
+    defer ee.deinit();
+}
+
+test "basic emit" {
+    const allocator = testing.allocator;
+
+    var ee = EventEmitter(TestEvent, *TestContext, u32).init(allocator);
     defer ee.deinit();
 
-    // try ee.addEventListener(.data_sent, dataSentCallback);
-    // try ee.addEventListener(.data_received, dataReceivedCallback);
+    var test_context = TestContext{
+        .data = 0,
+    };
+
+    try ee.addEventListener(&test_context, .data_sent, TestContext.onDataSent);
+    defer _ = ee.removeEventListener(&test_context, .data_sent, TestContext.onDataSent);
+
+    const want: u32 = 100;
+
+    try testing.expectEqual(0, test_context.data);
+
+    ee.emit(.data_sent, 100);
+
+    try testing.expectEqual(want, test_context.data);
 }
