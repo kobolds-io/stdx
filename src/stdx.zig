@@ -1,7 +1,7 @@
 // Data structures
-pub const EventEmitter = @import("./event_emitter2.zig").EventEmitter;
 pub const BufferedChannel = @import("./buffered_channel.zig").BufferedChannel;
 pub const CancellationToken = @import("./cancellation_token.zig").CancellationToken;
+pub const EventEmitter = @import("./event_emitter.zig").EventEmitter;
 pub const ManagedQueue = @import("./managed_queue.zig").ManagedQueue;
 pub const MemoryPool = @import("./memory_pool.zig").MemoryPool;
 pub const RingBuffer = @import("./ring_buffer.zig").RingBuffer;
