@@ -21,13 +21,14 @@ All data structures, algorithms and utilities included in this library are writt
       1. [Channels](#channels)
          1. [BufferedChannel](#bufferedchannel)
          2. [UnbufferedChannel](#unbufferedchannel)
-      2. [Queues/Lists](#queues/lists)
+      2. [Events](#events)
+         1. [EventEmitter](#eventemitter)
+      3. [Queues/Lists](#queues/lists)
          1. [ManagedQueue](#managedqueue)
          2. [UnmanagedQueue](#unmanagedqueue)
          3. [RingBuffer](#ringbuffer)
-      3. [Memory Management](#memory-management)
+      4. [Memory Management](#memory-management)
          1. [MemoryPool](#memorypool)
-      4. [IO](#io)
 
 ## Usage
 
@@ -168,6 +169,16 @@ The `UnbufferedChannel` is a structure that can be used to safely transmit data 
 
 See [example](./examples/unbuffered_channel.zig) and [source](./src/unbuffered_channel.zig) for more information on usage.
 
+### Events
+
+#### EventEmitter
+
+> added TBD
+
+The `EventEmitter` is a tool for managing communications across callbacks. This is a very similar implementation to the nodejs event emitter class which is one of the fundemental building blocks for asynchronous events. The `EventEmitter` provides a simple(ish) api to register `Callback`s with appropriate `Context`s to be called when a specific `Event` is called. 
+
+See [example](./examples/event_emitter.zig) and [source](./src/event_emitter.zig) for more information on usage.
+
 ### Queues/Lists
 
 #### ManagedQueue
@@ -206,6 +217,5 @@ A `MemoryPool` is a structure that uses pre-allocated blocks of memory to quickl
 
 See [example](./examples/memory_pool.zig) and [source](./src/memory_pool.zig) for more information on usage.
 
-### IO
 
-Module containing solutions for handling input and output
+
