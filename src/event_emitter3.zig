@@ -76,6 +76,16 @@ test "init/deinit" {
     defer ee.deinit();
 }
 
+fn TestStruct(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        fn emitterCallback(data: T) void {
+            _ = data;
+        }
+    };
+}
+
 test "basic emit" {
     const allocator = testing.allocator;
 
@@ -87,15 +97,10 @@ test "basic emit" {
     var ee = EventEmitter(TestEvent, u32).init(allocator);
     defer ee.deinit();
 
-    const listener = struct {
-        fn callback(data: u32) void {
-            _ = data;
-            // log.err("asdfasdf {}", .{data});
-        }
-    }.callback;
+    // var ts = TestStruct(u32){};
 
-    try ee.addEventListener(.hello, listener);
-    defer assert(ee.removeEventListener(.hello, listener));
+    try ee.addEventListener(.hello, TestStruct(u32).emitterCallback);
+    defer assert(ee.removeEventListener(.hello, TestStruct(u32).emitterCallback));
 
     ee.emit(.hello, 123);
 }
