@@ -59,7 +59,7 @@ You can install `stdx` just like any other `zig` dependency by editing your `bui
     .dependencies = .{
         .stdx = .{
             // the latest version of the library is v0.0.2
-            .url = "https://github.com/kobolds-io/stdx/archive/refs/tags/v0.0.5.tar.gz",
+            .url = "https://github.com/kobolds-io/stdx/archive/refs/tags/v0.0.6.tar.gz",
             .hash = "",
         },
     },
@@ -87,7 +87,7 @@ Examples are best used if you modify the code and add print statements to figure
 
 There are benchmarks included in this library that you can run your local hardware or target hardware. You can run benchmarksby performing the following steps. Benchmarks are in the [benchmarks](./benchmarks/) directory. More benchmarks are always welcome. Benchmarks in this library are written using [`zbench`](https://github.com/hendriknielaender/zBench) by hendriknielander. Please check out that repo and star it and support other `zig` developers.
 
-**Note** Benchmarks are always a point of contention between everyone. One of my goals is to provision some hardware in the cloud that is consistently used as the hardware for all comparisons. Until then, you can run the code locally to test out your performance.
+**Note** Benchmarks are always a point of contention between everyone. One of my goals is to provision some hardware in the cloud that is consistently used as the hardware for all comparisons. Until then, you can run the code locally to test out your performance. These benchmarks are run inside of a virtual machine and the CPU is fully emulated. This means you will see better performance on your native machines.
 
 ```bash
 # with standard optimizations (debug build)
@@ -190,7 +190,7 @@ See [example](./examples/unbuffered_channel.zig) and [source](./src/unbuffered_c
 
 #### EventEmitter
 
-> added TBD
+> added v0.0.6
 
 The `EventEmitter` is a tool for managing communications across callbacks. This is a very similar implementation to the nodejs event emitter class which is one of the fundemental building blocks for asynchronous events. The `EventEmitter` provides a simple(ish) api to register `Callback`s with appropriate `Context`s to be called when a specific `Event` is called. 
 
