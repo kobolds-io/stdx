@@ -1,5 +1,5 @@
 // Data structures
-pub const EventEmitter = @import("./event_emitter.zig").EventEmitter;
+pub const EventEmitter = @import("./event_emitter3.zig").EventEmitter;
 pub const BufferedChannel = @import("./buffered_channel.zig").BufferedChannel;
 pub const CancellationToken = @import("./cancellation_token.zig").CancellationToken;
 pub const ManagedQueue = @import("./managed_queue.zig").ManagedQueue;

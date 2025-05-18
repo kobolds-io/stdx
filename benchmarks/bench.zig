@@ -13,4 +13,5 @@ comptime {
     _ = @import("unbuffered_channel.zig");
     _ = @import("memory_pool.zig");
     _ = @import("ring_buffer.zig");
+    _ = @import("event_emitter.zig");
 }
