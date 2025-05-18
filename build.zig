@@ -55,13 +55,14 @@ fn setupTests(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
 fn setupExamples(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
     const example_step = b.step("examples", "Build examples");
     const example_names = [_][]const u8{
-        "mpmc_bus",
-        "mpmc_queue",
         "buffered_channel",
-        "unbuffered_channel",
+        "event_emitter",
         "managed_queue",
         "memory_pool",
+        "mpmc_bus",
+        "mpmc_queue",
         "ring_buffer",
+        "unbuffered_channel",
         "unmanaged_queue",
     };
 
