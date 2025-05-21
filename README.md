@@ -172,7 +172,7 @@ The `stdx` top level module. Directly contains data structures and is the parent
 
 #### BufferedChannel
 
-> added v0.0.3
+> added v0.0.3 as `stdx.BufferedChannel`
 
 The `BufferedChannel` is a structure that can be used to safely transmit data across threads. It uses a backing buffer which stores the actual values transmitted. Additionally it has a very simple api `send`/`receive` and supports concepts like cancellation and timeouts.
 
@@ -180,7 +180,7 @@ See [example](./examples/buffered_channel.zig) and [source](./src/buffered_chann
 
 #### UnbufferedChannel
 
-> added v0.0.3
+> added v0.0.3 as `stdx.UnbufferedChannel`
 
 The `UnbufferedChannel` is a structure that can be used to safely transmit data across threads. It uses a `Condition` to notify receivers that there is new data. Additionally it has a very simple api `send`/`receive` and supports concepts like timeouts but does not currently support cancellation.
 
@@ -190,7 +190,8 @@ See [example](./examples/unbuffered_channel.zig) and [source](./src/unbuffered_c
 
 #### EventEmitter
 
-> added v0.0.6
+> added v0.0.6 as `stdx.EventEmitter`
+
 
 The `EventEmitter` is a tool for managing communications across callbacks. This is a very similar implementation to the nodejs event emitter class which is one of the fundemental building blocks for asynchronous events. The `EventEmitter` provides a simple(ish) api to register `Callback`s with appropriate `Context`s to be called when a specific `Event` is called. 
 
@@ -200,7 +201,8 @@ See [example](./examples/event_emitter.zig) and [source](./src/event_emitter.zig
 
 #### ManagedQueue
 
-> added v0.0.2
+> added v0.0.2 as `stdx.ManagedQueue`
+
 
 The `ManagedQueue` is a generic queue implementation that uses a singly linked list. It allows for the management of a queue with operations like enqueueing, dequeueing, checking if the queue is empty, concatenating two queues, and handles the allocation/deallocation of memory used by the queue. The queue is managed by an allocator, which is used for creating and destroying nodes.
 
@@ -208,7 +210,8 @@ See [example](./examples/managed_queue.zig) and [source](./src/managed_queue.zig
 
 #### UnmanagedQueue
 
-> added v0.0.2
+> added v0.0.2 as `stdx.UnmanagedQueue`
+
 
 The `UnmanagedQueue` is a generic queue implementation that uses a singly linked list. It most closely represents the `std.SinglyLinkedList` in its functionality. Differing from the `ManagedQueue`, the `UnmanagedQueue` requires memory allocations to be external to the queue and provides a generic `Node` structure to help link everything together.
 
@@ -218,7 +221,7 @@ See [example](./examples/unmanaged_queue.zig) and [source](./src/unmanaged_queue
 
 #### RingBuffer
 
-> added v0.0.1
+> added v0.0.1 as `stdx.RingBuffer`
 
 A `RingBuffer` is a data structure that is really useful for managing memory in a fixed memory allocation. This particular implementation is particularly useful for a fixed size queue. Kobolds uses the `RingBuffer` data structure for inboxes and outboxes for when messages are received/sent through TCP connections.
 
@@ -228,11 +231,8 @@ See [example](./examples/ring_buffer.zig) and [source](./src/ring_buffer.zig) fo
 
 #### MemoryPool
 
-> added v0.0.1
+> added v0.0.1 as `stdx.MemoryPool`
 
 A `MemoryPool` is a structure that uses pre-allocated blocks of memory to quickly allocoate and deallocate resources quickly. It is very useful in situations where you have statically allocated memory but you will have fluctuating usage of that memory. A good example would be handling messages flowing throughout a system.
 
 See [example](./examples/memory_pool.zig) and [source](./src/memory_pool.zig) for more information on usage.
-
-
-
