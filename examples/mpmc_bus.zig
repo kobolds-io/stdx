@@ -24,8 +24,8 @@ const BUS_QUEUE_SIZE = 5_000;
 const PRODUCER_QUEUE_SIZE = 5_000;
 const CONSUMER_QUEUE_SIZE = 5_000;
 const ITERATIONS = 10_000;
-const CONSUMER_COUNT = 100;
-const PRODUCER_COUNT = 1;
+const CONSUMER_COUNT = 10;
+const PRODUCER_COUNT = 5;
 
 pub fn doProduce(
     producers: *std.ArrayList(*Producer(VALUE_TYPE)),
@@ -179,7 +179,7 @@ pub fn Bus(comptime T: type) type {
             ready.send(true);
             while (true) {
                 // check if we have received a signale to close the topic
-                const signal = self.close_channel.timedReceive(0) catch false;
+                const signal = self.close_channel.tryReceive(0) catch false;
                 if (signal) {
                     return;
                 }
@@ -247,7 +247,7 @@ pub fn Consumer(comptime T: type) type {
             ready.send(true);
             while (true) {
                 // check if we have received a signale to close the topic
-                const signal = self.close_channel.timedReceive(0) catch false;
+                const signal = self.close_channel.tryReceive(0) catch false;
                 if (signal) {
                     return;
                 }
