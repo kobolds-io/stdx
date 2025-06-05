@@ -57,17 +57,17 @@ pub fn UnbufferedChannel(comptime T: type) type {
             return result;
         }
 
-        pub fn timedReceive(self: *Self, timeout_ns: u64) !T {
+        pub fn tryReceive(self: *Self, timeout_ns: u64) !T {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            const fn_now: u64 = @intCast(std.time.nanoTimestamp());
-            const deadline: u64 = fn_now + timeout_ns;
+            const fn_now = std.time.nanoTimestamp();
+            const deadline = fn_now + timeout_ns;
 
             while (!self.has_value) {
-                const loop_now: u64 = @intCast(std.time.nanoTimestamp());
+                const loop_now = std.time.nanoTimestamp();
                 if (loop_now >= deadline) return error.TimedOut;
-                try self.condition.timedWait(&self.mutex, deadline - loop_now);
+                try self.condition.timedWait(&self.mutex, @intCast(deadline - loop_now));
             }
 
             const result = self.value;
@@ -91,7 +91,7 @@ test "good behavior" {
     const th = try std.Thread.spawn(.{}, testerFn, .{ &channel, want });
     defer th.join();
 
-    const got = try channel.timedReceive(1 * std.time.ns_per_ms);
+    const got = try channel.tryReceive(1 * std.time.ns_per_ms);
 
     try testing.expectEqual(want, got);
 }
@@ -109,7 +109,7 @@ test "bad behavior" {
     const th = try std.Thread.spawn(.{}, testerFn, .{ &channel, 9999 });
     defer th.join();
 
-    try testing.expectError(error.Timeout, channel.timedReceive(1 * std.time.ns_per_us));
+    try testing.expectError(error.Timeout, channel.tryReceive(1 * std.time.ns_per_us));
 }
 
 test "receive multiple values" {
