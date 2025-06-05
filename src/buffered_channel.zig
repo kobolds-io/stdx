@@ -52,18 +52,18 @@ pub fn BufferedChannel(comptime T: type) type {
             return value;
         }
 
-        pub fn trySend(self: *Self, value: T, timeout_us: i64, cancel: ?*CancellationToken) !void {
+        pub fn trySend(self: *Self, value: T, timeout_ns: u64, cancel: ?*CancellationToken) !void {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            const deadline = std.time.microTimestamp() + timeout_us;
+            const deadline = std.time.nanoTimestamp() + timeout_ns;
 
             while (self.buffer.isFull()) {
                 if (cancel) |token| {
                     if (token.isCancelled()) return error.Cancelled;
                 }
 
-                const now: i64 = std.time.microTimestamp();
+                const now = std.time.nanoTimestamp();
                 if (now >= deadline) return error.Timeout;
 
                 self.not_empty.timedWait(&self.mutex, @intCast(deadline - now)) catch {
@@ -75,18 +75,18 @@ pub fn BufferedChannel(comptime T: type) type {
             self.not_empty.signal();
         }
 
-        pub fn tryReceive(self: *Self, timeout_us: i64, cancel: ?*CancellationToken) !T {
+        pub fn tryReceive(self: *Self, timeout_ns: u64, cancel: ?*CancellationToken) !T {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            const deadline = std.time.microTimestamp() + timeout_us;
+            const deadline = std.time.nanoTimestamp() + timeout_ns;
 
             while (self.buffer.isEmpty()) {
                 if (cancel) |token| {
                     if (token.isCancelled()) return error.Cancelled;
                 }
 
-                const now: i64 = std.time.microTimestamp();
+                const now = std.time.nanoTimestamp();
                 if (now >= deadline) return error.Timeout;
 
                 self.not_empty.timedWait(&self.mutex, @intCast(deadline - now)) catch {
@@ -100,9 +100,6 @@ pub fn BufferedChannel(comptime T: type) type {
             }
 
             return error.SyncError;
-
-            // const value = self.buffer.dequeue().?;
-            // return value;
         }
 
         pub fn count(self: Self) usize {
@@ -205,7 +202,7 @@ test "receive timeouts and cancellation" {
     defer channel.deinit();
 
     const receiver = struct {
-        pub fn do(running: *bool, chan: *BufferedChannel(usize), delay: i64, cancel_token: *CancellationToken) void {
+        pub fn do(running: *bool, chan: *BufferedChannel(usize), delay: u64, cancel_token: *CancellationToken) void {
             running.* = true;
             // ensure that the token is not cancelled before starting to wait
             assert(!cancel_token.isCancelled());
@@ -217,8 +214,7 @@ test "receive timeouts and cancellation" {
     try testing.expectError(error.Timeout, channel.tryReceive(1, null));
 
     var cancel_token = CancellationToken{};
-    // 100 milliseconds
-    const delay = 100_000;
+    const delay = 100 * std.time.ns_per_ms;
     var running = false;
     const cancel_th = try std.Thread.spawn(.{}, receiver, .{ &running, &channel, delay, &cancel_token });
     defer cancel_th.join();
@@ -242,7 +238,7 @@ test "send timeouts and cancellation" {
     }
 
     const sender = struct {
-        pub fn do(running: *bool, chan: *BufferedChannel(usize), delay: i64, cancel_token: *CancellationToken) void {
+        pub fn do(running: *bool, chan: *BufferedChannel(usize), delay: u64, cancel_token: *CancellationToken) void {
             running.* = true;
             // ensure that the token is not cancelled before starting to wait
             assert(!cancel_token.isCancelled());
@@ -255,8 +251,7 @@ test "send timeouts and cancellation" {
 
     var cancel_token = CancellationToken{};
 
-    // 100 milliseconds
-    const delay = 100_000;
+    const delay = 100 * std.time.ns_per_ms;
     var running = false;
     const cancel_th = try std.Thread.spawn(.{}, sender, .{ &running, &channel, delay, &cancel_token });
     defer cancel_th.join();
