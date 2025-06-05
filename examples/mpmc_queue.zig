@@ -20,12 +20,12 @@ const sardine = Dog{
 
 // This is the type that will be processed
 const VALUE_TYPE: type = *const Dog;
-const TOPIC_QUEUE_SIZE = 50_000;
-const PRODUCER_QUEUE_SIZE = 10_000;
-const WORKER_QUEUE_SIZE = 10_000;
-const ITERATIONS = 10_000;
+const TOPIC_QUEUE_SIZE = 10_000;
+const PRODUCER_QUEUE_SIZE = 1_000;
+const WORKER_QUEUE_SIZE = 1_000;
+const ITERATIONS = 1_000;
 const WORKER_COUNT = 10;
-const PRODUCER_COUNT = 5;
+const PRODUCER_COUNT = 1;
 const PRODUCER_BACKPRESSURE_MAX_CAPACITY = PRODUCER_QUEUE_SIZE * 10;
 
 pub fn Topic(comptime T: type) type {

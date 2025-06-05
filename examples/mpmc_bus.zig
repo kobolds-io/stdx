@@ -20,12 +20,12 @@ const sardine = Dog{
 
 // This is the type that will be processed
 const VALUE_TYPE: type = *const Dog;
-const BUS_QUEUE_SIZE = 5_000;
-const PRODUCER_QUEUE_SIZE = 5_000;
-const CONSUMER_QUEUE_SIZE = 5_000;
-const ITERATIONS = 10_000;
+const BUS_QUEUE_SIZE = 1_000;
+const PRODUCER_QUEUE_SIZE = 1_000;
+const CONSUMER_QUEUE_SIZE = 1_000;
+const ITERATIONS = 1_000;
 const CONSUMER_COUNT = 10;
-const PRODUCER_COUNT = 5;
+const PRODUCER_COUNT = 1;
 
 pub fn doProduce(
     producers: *std.ArrayList(*Producer(VALUE_TYPE)),
