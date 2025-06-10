@@ -113,6 +113,7 @@ pub fn Producer(comptime T: type) type {
             };
 
             self.produced_count += 1;
+            log.err("producer enqueue here", .{});
         }
 
         pub fn tick(self: *Self) !void {
@@ -268,6 +269,7 @@ pub fn main() !void {
         th.detach();
 
         _ = ready_channel.receive();
+        log.debug("producer {} ready", .{producer.id});
     }
 
     for (workers.items) |worker| {
@@ -281,6 +283,7 @@ pub fn main() !void {
         th.detach();
 
         _ = ready_channel.receive();
+        log.debug("worker {} ready", .{worker.id});
     }
 
     var timer = try std.time.Timer.start();

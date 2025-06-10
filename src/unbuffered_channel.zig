@@ -5,7 +5,7 @@ const assert = std.debug.assert;
 /// A very simple implementation of a channel. Very useful for sending signals across
 /// threads for syncing operations or to ensure that a thread has completed a task.
 /// This channel is able to send multiple values to the receiver but can only hold a
-/// single value.
+/// single value at a time.
 pub fn UnbufferedChannel(comptime T: type) type {
     return struct {
         const Self = @This();
@@ -16,22 +16,15 @@ pub fn UnbufferedChannel(comptime T: type) type {
         has_value: bool = false,
 
         pub fn new() Self {
-            return .{
-                .condition = .{},
-                .mutex = .{},
-                .value = undefined,
-                .has_value = false,
-            };
+            return .{};
         }
 
         /// Send a value to the receiver.
-        ///
-        /// `send` will block until the `receive` is called.
+        /// `send` will block until the `receive` is called and consumes the value.
         pub fn send(self: *Self, value: T) void {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            // Wait until the previous value has been received
             while (self.has_value) {
                 self.condition.wait(&self.mutex);
             }
@@ -41,19 +34,18 @@ pub fn UnbufferedChannel(comptime T: type) type {
             self.condition.signal();
         }
 
-        /// Receive a value from a sender.
+        /// Receive a value from the sender.
         pub fn receive(self: *Self) T {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            // Wait until a value is available
             while (!self.has_value) {
                 self.condition.wait(&self.mutex);
             }
 
             const result = self.value;
             self.has_value = false;
-            self.condition.signal(); // allow sender to send again
+            self.condition.signal(); // notify sender
             return result;
         }
 
@@ -61,18 +53,24 @@ pub fn UnbufferedChannel(comptime T: type) type {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            const fn_now = std.time.nanoTimestamp();
-            const deadline = fn_now + timeout_ns;
+            const start = std.time.nanoTimestamp();
+            const deadline = start + timeout_ns;
 
             while (!self.has_value) {
-                const loop_now = std.time.nanoTimestamp();
-                if (loop_now >= deadline) return error.TimedOut;
-                try self.condition.timedWait(&self.mutex, @intCast(deadline - loop_now));
+                const now = std.time.nanoTimestamp();
+                if (now >= deadline) {
+                    self.condition.signal(); // signal sender in case it’s waiting
+                    return error.TimedOut;
+                }
+
+                const remaining: u64 = @intCast(deadline - now);
+                assert(remaining > 0);
+                try self.condition.timedWait(&self.mutex, remaining);
             }
 
             const result = self.value;
             self.has_value = false;
-            self.condition.signal();
+            self.condition.signal(); // notify sender
             return result;
         }
     };
@@ -99,15 +97,13 @@ test "good behavior" {
 test "bad behavior" {
     const testerFn = struct {
         fn run(channel: *UnbufferedChannel(u32), value: u32) void {
-            // exceeds the allowed timeout value for channel receive
-            std.time.sleep(5 * std.time.ns_per_ms);
+            std.time.sleep(500 * std.time.ns_per_ms); // wait too long
             channel.send(value);
         }
     }.run;
 
     var channel = UnbufferedChannel(u32).new();
-    const th = try std.Thread.spawn(.{}, testerFn, .{ &channel, 9999 });
-    defer th.join();
+    _ = try std.Thread.spawn(.{}, testerFn, .{ &channel, 9999 });
 
     try testing.expectError(error.Timeout, channel.tryReceive(1 * std.time.ns_per_us));
 }
