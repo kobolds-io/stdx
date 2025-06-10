@@ -20,12 +20,12 @@ const sardine = Dog{
 
 // This is the type that will be processed
 const VALUE_TYPE: type = *const Dog;
-const TOPIC_QUEUE_SIZE = 50_000;
-const PRODUCER_QUEUE_SIZE = 10_000;
-const WORKER_QUEUE_SIZE = 10_000;
-const ITERATIONS = 1_000_000;
-const WORKER_COUNT = 10;
-const PRODUCER_COUNT = 1;
+const TOPIC_QUEUE_SIZE = 10_000;
+const PRODUCER_QUEUE_SIZE = 5_0000;
+const WORKER_QUEUE_SIZE = 5_000;
+const ITERATIONS = 100_000;
+const WORKER_COUNT = 100;
+const PRODUCER_COUNT = 100;
 const PRODUCER_BACKPRESSURE_MAX_CAPACITY = PRODUCER_QUEUE_SIZE * 10;
 
 pub fn Topic(comptime T: type) type {
@@ -140,7 +140,7 @@ pub fn Producer(comptime T: type) type {
             ready.send(true);
             while (true) {
                 // check if we have received a signale to close the topic
-                const signal = self.close_channel.timedReceive(0) catch false;
+                const signal = self.close_channel.tryReceive(0) catch false;
                 if (signal) {
                     // log.info("signal received to stop producer {}", .{self.id});
                     // log.debug("producer {}: produced {} items", .{ self.id, self.produced_count });
@@ -205,7 +205,7 @@ pub fn Worker(comptime T: type) type {
             ready.send(true);
             while (true) {
                 // check if we have received a signale to close the topic
-                const signal = self.close_channel.timedReceive(0) catch false;
+                const signal = self.close_channel.tryReceive(0) catch false;
                 if (signal) {
                     // log.err("signal received to stop worker {}", .{self.id});
                     // log.err("worker {}: processed {} items", .{ self.id, self.processed_count });
@@ -268,6 +268,7 @@ pub fn main() !void {
         th.detach();
 
         _ = ready_channel.receive();
+        log.debug("producer {} ready", .{producer.id});
     }
 
     for (workers.items) |worker| {
@@ -281,6 +282,7 @@ pub fn main() !void {
         th.detach();
 
         _ = ready_channel.receive();
+        log.debug("worker {} ready", .{worker.id});
     }
 
     var timer = try std.time.Timer.start();
@@ -333,11 +335,15 @@ pub fn main() !void {
     for (producers.items) |producer| {
         log.err("producer {} produced {}", .{ producer.id, producer.produced_count });
         producer.close();
+        producer.deinit();
+        allocator.destroy(producer);
     }
 
     for (workers.items) |worker| {
         log.err("worker {} processed {}", .{ worker.id, worker.processed_count });
         worker.close();
+        worker.deinit();
+        allocator.destroy(worker);
     }
 
     assert(processed_count == produced_count);

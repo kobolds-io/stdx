@@ -24,7 +24,7 @@ const BenchmarkUnbufferedChannelSendReceive = struct {
     pub fn run(self: Self, _: std.mem.Allocator) void {
         for (self.list.items) |data| {
             self.channel.send(data);
-            const v = self.channel.timedReceive(1 * std.time.ns_per_ms) catch unreachable;
+            const v = self.channel.tryReceive(1 * std.time.ns_per_ms) catch unreachable;
             assert(v == data);
         }
     }
@@ -35,7 +35,7 @@ var simple_channel: UnbufferedChannel(usize) = undefined;
 var data_list: std.ArrayList(usize) = undefined;
 const allocator = testing.allocator;
 
-test "SimpleChannel benchmarks" {
+test "UnbufferedChannel benchmarks" {
     var bench = zbench.Benchmark.init(
         std.testing.allocator,
         .{ .iterations = constants.benchmark_max_iterations },
