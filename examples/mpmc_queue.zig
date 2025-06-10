@@ -21,11 +21,11 @@ const sardine = Dog{
 // This is the type that will be processed
 const VALUE_TYPE: type = *const Dog;
 const TOPIC_QUEUE_SIZE = 10_000;
-const PRODUCER_QUEUE_SIZE = 1_000;
-const WORKER_QUEUE_SIZE = 1_000;
-const ITERATIONS = 1_000;
-const WORKER_COUNT = 10;
-const PRODUCER_COUNT = 1;
+const PRODUCER_QUEUE_SIZE = 5_0000;
+const WORKER_QUEUE_SIZE = 5_000;
+const ITERATIONS = 100_000;
+const WORKER_COUNT = 100;
+const PRODUCER_COUNT = 100;
 const PRODUCER_BACKPRESSURE_MAX_CAPACITY = PRODUCER_QUEUE_SIZE * 10;
 
 pub fn Topic(comptime T: type) type {
@@ -113,7 +113,6 @@ pub fn Producer(comptime T: type) type {
             };
 
             self.produced_count += 1;
-            log.err("producer enqueue here", .{});
         }
 
         pub fn tick(self: *Self) !void {
