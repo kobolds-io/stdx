@@ -30,7 +30,7 @@ const CalculatorState = enum {
     closed,
 };
 
-const ITERATIONS = 10_000;
+const ITERATIONS = 100_000;
 const AsyncCalculator = struct {
     const Self = @This();
 
@@ -38,15 +38,16 @@ const AsyncCalculator = struct {
     done_channel: UnbufferedChannel(bool),
     mutex: std.Thread.Mutex,
     allocator: std.mem.Allocator,
-    requests: *RingBuffer(*Request),
+    requests: *RingBuffer(Request),
     state: CalculatorState,
 
     pub fn init(allocator: std.mem.Allocator) !Self {
-        const requests = try allocator.create(RingBuffer(*Request));
+        const requests = try allocator.create(RingBuffer(Request));
         errdefer allocator.destroy(requests);
 
-        requests.* = try RingBuffer(*Request).init(allocator, ITERATIONS);
+        requests.* = try RingBuffer(Request).init(allocator, ITERATIONS);
         errdefer requests.deinit();
+
         return Self{
             .close_channel = UnbufferedChannel(bool).new(),
             .done_channel = UnbufferedChannel(bool).new(),
@@ -62,7 +63,7 @@ const AsyncCalculator = struct {
         self.allocator.destroy(self.requests);
     }
 
-    pub fn handleRequest(req: *Request) void {
+    pub fn handleRequest(req: Request) void {
         const left = req.left;
         const right = req.right;
 
@@ -88,6 +89,9 @@ const AsyncCalculator = struct {
 
             switch (self.state) {
                 .running => {
+                    self.mutex.lock();
+                    defer self.mutex.unlock();
+
                     while (self.requests.dequeue()) |req| {
                         AsyncCalculator.handleRequest(req);
                     }
@@ -147,6 +151,10 @@ pub fn main() !void {
     var requests = std.ArrayList(Request).init(allocator);
     defer requests.deinit();
 
+    // everything is setup now
+    var timer = try std.time.Timer.start();
+    const enqueue_start = timer.read();
+
     // enqueue all the requests at once
     {
         calculator.mutex.lock();
@@ -160,35 +168,36 @@ pub fn main() !void {
 
             try signals.append(signal);
 
-            const req = try allocator.create(Request);
-            errdefer allocator.destroy(req);
-
-            req.* = Request{
+            const req = Request{
                 .left = 10,
                 .right = 5,
                 .op = .add,
                 .signal = signal,
             };
 
+            try requests.append(req);
+
             try calculator.requests.enqueue(req);
         }
     }
 
-    // everything is setup now
-    var timer = try std.time.Timer.start();
-    const start = timer.read();
+    const enqueue_end = timer.read();
+    const await_start = timer.read();
 
+    // This is the main thread handling each request it received
     for (requests.items) |req| {
         const rep = req.signal.receive();
 
         assert(rep.result == 15);
-
         allocator.destroy(req.signal);
-        allocator.destroy(req);
     }
 
-    log.err("took {}ms, total iters {}", .{
-        (timer.read() - start) / std.time.ns_per_ms,
+    const await_end = timer.read();
+
+    log.err("total_time: {}ms, enqueue_time: {}ms, await_time {}ms, total iters {}", .{
+        (await_end - enqueue_start) / std.time.ns_per_ms,
+        (enqueue_end - enqueue_start) / std.time.ns_per_ms,
+        (await_end - await_start) / std.time.ns_per_ms,
         ITERATIONS,
     });
 }
