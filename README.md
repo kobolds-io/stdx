@@ -18,9 +18,10 @@ All data structures, algorithms and utilities included in this library are writt
    7. [Code of Conduct](#code-of-conduct)
 2. [Documentation](#documentation)
    1. [stdx](#stdx)
-      1. [Channels](#channels)
+      1. [Multithreading](#multithreading)
          1. [BufferedChannel](#bufferedchannel)
          2. [UnbufferedChannel](#unbufferedchannel)
+         3. [Signal](#signal)
       2. [Events](#events)
          1. [EventEmitter](#eventemitter)
       3. [Queues/Lists](#queues/lists)
@@ -112,44 +113,51 @@ Example output
 |----------------------------|
 benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995      
 -----------------------------------------------------------------------------------------------------------------------------
-send 10000 items       65535    5.978s         91.221us ± 9.457us     (89.218us ... 1.138ms)       90.666us   111.9us    122.597us 
-receive 10000 items    65535    5.225s         79.732us ± 23.589us    (78.144us ... 5.563ms)       78.203us   97.977us   106.537us 
+send 10000 items       65535    6.023s         91.911us ± 9.739us     (84.589us ... 1.224ms)       92.753us   117.245us  127.908us 
+receive 10000 items    65535    5.252s         80.149us ± 81.776us    (74.105us ... 20.92ms)       78.253us   100.384us  110.577us 
 
 |-------------------------|
 | EventEmitter Benchmarks |
 |-------------------------|
 benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995      
 -----------------------------------------------------------------------------------------------------------------------------
-emit 1 listeners 10000 65535    1.345s         20.537us ± 4.376us     (20.041us ... 938.316us)     20.149us   28.284us   31.929us  
-emit 10 listeners 1000 65535    16.403s        250.296us ± 57.211us   (245.288us ... 7.739ms)      250.53us   288.914us  314.547us 
-emit 100 listeners 100 65535    52.484s        800.858us ± 143.457us  (775.436us ... 26.503ms)     801.911us  887.258us  911.323us 
+emit 1 listeners 10000 65535    1.348s         20.57us ± 5.868us      (18.989us ... 1.277ms)       20.086us   28.444us   34.267us  
+emit 10 listeners 1000 65535    6.699s         102.221us ± 8.004us    (94.788us ... 651.443us)     101.171us  131.12us   141.943us 
+emit 100 listeners 100 65535    1m4.102s       978.141us ± 170.618us  (801.628us ... 42.85ms)      979.128us  1.109ms    1.153ms   
 
-|-----------------------------|
+|-----------------------|
 | MemoryPool Benchmarks |
-|-----------------------------|
+|-----------------------|
 benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995      
 -----------------------------------------------------------------------------------------------------------------------------
-create 10000 items     65535    10.823s        165.151us ± 56.237us   (156.418us ... 10.587ms)     167.643us  195.593us  205.906us 
-unsafeCreate 10000 ite 65535    9.039s         137.932us ± 89.459us   (130.404us ... 13.157ms)     137.561us  164.779us  174.227us 
+create 10000 items     65535    11.195s        170.832us ± 14.034us   (154.051us ... 782.661us)    173.37us   210.343us  226.573us 
+unsafeCreate 10000 ite 65535    9.1s           138.859us ± 18.31us    (125.438us ... 3.193ms)      139.498us  177.102us  194.618us 
 
 |-----------------------|
 | RingBuffer Benchmarks |
 |-----------------------|
 benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995      
 -----------------------------------------------------------------------------------------------------------------------------
-enqueue 10000 items    65535    2.061s         31.457us ± 3.553us     (30.934us ... 679.756us)     30.971us   40.235us   44.944us  
-enqueueMany 10000 item 65535    2.066s         31.525us ± 7.294us     (30.966us ... 1.759ms)       31.019us   40.276us   45.255us  
-dequeue 10000 items    65535    1.033s         15.765us ± 16.791us    (15.445us ... 3.781ms)       15.483us   22.014us   23.535us  
-dequeueMany 10000 item 65535    2.061s         31.46us ± 13.802us     (30.902us ... 2.633ms)       30.937us   39.676us   45.005us  
-concatenate 10000 item 65535    2.111s         32.217us ± 3.041us     (30.926us ... 251.041us)     31.726us   43.751us   48.322us  
-copy 10000 items       65535    2.164s         33.033us ± 5.862us     (31.009us ... 1.279ms)       33.507us   43.677us   47.611us  
+enqueue 10000 items    65535    2.09s          31.895us ± 5.643us     (29.393us ... 591.054us)     31.035us   44.913us   56.298us  
+enqueueMany 10000 item 65535    2.081s         31.762us ± 4.208us     (29.366us ... 249.166us)     30.996us   42.863us   52.171us  
+dequeue 10000 items    65535    1.038s         15.842us ± 3.086us     (14.645us ... 191.955us)     15.483us   22.757us   27.744us  
+dequeueMany 10000 item 65535    2.075s         31.669us ± 4.581us     (29.301us ... 596.145us)     30.946us   42.096us   48.55us   
+concatenate 10000 item 65535    2.129s         32.496us ± 6.142us     (29.688us ... 999.682us)     31.736us   45.44us    54.384us  
+copy 10000 items       65535    2.198s         33.54us ± 5.096us      (29.758us ... 322.781us)     33.474us   45.536us   56.505us  
+
+|-------------------|
+| Signal Benchmarks |
+|-------------------|
+benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995      
+-----------------------------------------------------------------------------------------------------------------------------
+send/receive 10000 ite 65535    10.305s        157.253us ± 97.686us   (145.048us ... 24.931ms)     156.48us   196.237us  218.677us 
 
 |------------------------------|
 | UnbufferedChannel Benchmarks |
 |------------------------------|
 benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995      
 -----------------------------------------------------------------------------------------------------------------------------
-send/receive 10000 ite 65535    19.19s         292.823us ± 60.431us   (287.15us ... 11.267ms)      295.715us  325.544us  337.803us
+send/receive 10000 ite 65535    19.194s        292.884us ± 19.063us   (272.291us ... 1.49ms)       293.928us  340.837us  364.945us
 ```
 
 ## Contributing
@@ -168,7 +176,7 @@ Please see the [Code of Conduct](./CODE_OF_CONDUCT.md) file. Simple library, sim
 
 The `stdx` top level module. Directly contains data structures and is the parent module to modules like `io` and `net`.
 
-### Channels
+### Mutlithreading
 
 #### BufferedChannel
 
@@ -185,6 +193,16 @@ See [example](./examples/buffered_channel.zig) and [source](./src/buffered_chann
 The `UnbufferedChannel` is a structure that can be used to safely transmit data across threads. It uses a `Condition` to notify receivers that there is new data. Additionally it has a very simple api `send`/`receive` and supports concepts like timeouts but does not currently support cancellation.
 
 See [example](./examples/unbuffered_channel.zig) and [source](./src/unbuffered_channel.zig) for more information on usage.
+
+#### Signal
+
+> TBD
+
+The `Signal` is a structure that can be used to safely transmit data across threads. Unlike a channel, it does not require that both threads become synchronized at the same point. Think of a `Signal` as a way for a sender to throw a value over the fence and a receiver to pick the value at a later time (when it is convenient for the receiver). `Signal`s are "one shots", meaning that they should only ever be used once. These structures are ideal for things like `request`->`reply` kinds of problems.
+
+See [example](./examples/signal.zig) and [source](./src/signal.zig) for more information on usage.
+
+
 
 ### Events
 
