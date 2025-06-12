@@ -133,8 +133,8 @@ test "MemoryPool benchmarks" {
     // Write the results to stderr
     const stderr = std.io.getStdErr().writer();
     try stderr.writeAll("\n");
-    try stderr.writeAll("|-----------------------------|\n");
+    try stderr.writeAll("|-----------------------|\n");
     try stderr.writeAll("| MemoryPool Benchmarks |\n");
-    try stderr.writeAll("|-----------------------------|\n");
+    try stderr.writeAll("|-----------------------|\n");
     try bench.run(stderr);
 }
