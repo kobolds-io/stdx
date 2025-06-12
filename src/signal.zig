@@ -24,7 +24,7 @@ pub fn Signal(comptime T: type) type {
             };
         }
 
-        pub fn recieve(self: *Self) T {
+        pub fn receive(self: *Self) T {
             self.mutex.lock();
             defer self.mutex.unlock();
 
@@ -75,7 +75,7 @@ pub fn Signal(comptime T: type) type {
             defer self.mutex.unlock();
 
             // we enforce that this is a true one shot and can only be used between a single
-            // sender and a single reciever
+            // sender and a single receiever
             assert(self.value == null);
 
             const start = std.time.nanoTimestamp();
@@ -103,7 +103,7 @@ test "basic operation" {
     var signal = Signal(usize).new();
     signal.send(want);
 
-    const got = signal.recieve();
+    const got = signal.receive();
 
     try testing.expectEqual(want, got);
 }
@@ -123,9 +123,9 @@ test "multithreaded support" {
         }
     };
 
-    const reciever = struct {
-        fn recieve(sig: *Signal(usize), res: *usize) void {
-            const got = sig.recieve();
+    const receiever = struct {
+        fn receieve(sig: *Signal(usize), res: *usize) void {
+            const got = sig.receive();
             res.* = got;
         }
 
@@ -139,8 +139,8 @@ test "multithreaded support" {
 
     try testing.expect(want != result);
 
-    const recieve_thread = try std.Thread.spawn(.{}, reciever.recieve, .{ &signal, &result });
-    defer recieve_thread.join();
+    const receieve_thread = try std.Thread.spawn(.{}, receiever.receieve, .{ &signal, &result });
+    defer receieve_thread.join();
 
     const send_thread = try std.Thread.spawn(.{}, sender.send, .{ &signal, want });
     defer send_thread.join();
@@ -167,7 +167,7 @@ test "multithreaded support" {
     try testing.expect(want != result);
 
     var timed_signal = Signal(usize).new();
-    const try_receive_thread = try std.Thread.spawn(.{}, reciever.tryReceive, .{ &timed_signal, &result, timeout_ns });
+    const try_receive_thread = try std.Thread.spawn(.{}, receiever.tryReceive, .{ &timed_signal, &result, timeout_ns });
     defer try_receive_thread.join();
 
     const try_send_thread = try std.Thread.spawn(.{}, sender.trySend, .{ &timed_signal, want, timeout_ns });
