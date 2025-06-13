@@ -202,8 +202,6 @@ The `Signal` is a structure that can be used to safely transmit data across thre
 
 See [example](./examples/signal.zig) and [source](./src/signal.zig) for more information on usage.
 
-
-
 ### Events
 
 #### EventEmitter
@@ -221,7 +219,6 @@ See [example](./examples/event_emitter.zig) and [source](./src/event_emitter.zig
 
 > added v0.0.2 as `stdx.ManagedQueue`
 
-
 The `ManagedQueue` is a generic queue implementation that uses a singly linked list. It allows for the management of a queue with operations like enqueueing, dequeueing, checking if the queue is empty, concatenating two queues, and handles the allocation/deallocation of memory used by the queue. The queue is managed by an allocator, which is used for creating and destroying nodes.
 
 See [example](./examples/managed_queue.zig) and [source](./src/managed_queue.zig) for more information on usage.
@@ -229,7 +226,6 @@ See [example](./examples/managed_queue.zig) and [source](./src/managed_queue.zig
 #### UnmanagedQueue
 
 > added v0.0.2 as `stdx.UnmanagedQueue`
-
 
 The `UnmanagedQueue` is a generic queue implementation that uses a singly linked list. It most closely represents the `std.SinglyLinkedList` in its functionality. Differing from the `ManagedQueue`, the `UnmanagedQueue` requires memory allocations to be external to the queue and provides a generic `Node` structure to help link everything together.
 
