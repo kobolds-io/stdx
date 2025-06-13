@@ -60,7 +60,7 @@ You can install `stdx` just like any other `zig` dependency by editing your `bui
     .dependencies = .{
         .stdx = .{
             // the latest version of the library is v0.0.2
-            .url = "https://github.com/kobolds-io/stdx/archive/refs/tags/v0.0.7.tar.gz",
+            .url = "https://github.com/kobolds-io/stdx/archive/refs/tags/v0.0.8.tar.gz",
             .hash = "",
         },
     },
@@ -196,13 +196,11 @@ See [example](./examples/unbuffered_channel.zig) and [source](./src/unbuffered_c
 
 #### Signal
 
-> TBD
+> added v0.0.8 as `stdx.Signal`
 
 The `Signal` is a structure that can be used to safely transmit data across threads. Unlike a channel, it does not require that both threads become synchronized at the same point. Think of a `Signal` as a way for a sender to throw a value over the fence and a receiver to pick the value at a later time (when it is convenient for the receiver). `Signal`s are "one shots", meaning that they should only ever be used once. These structures are ideal for things like `request`->`reply` kinds of problems.
 
 See [example](./examples/signal.zig) and [source](./src/signal.zig) for more information on usage.
-
-
 
 ### Events
 
@@ -221,7 +219,6 @@ See [example](./examples/event_emitter.zig) and [source](./src/event_emitter.zig
 
 > added v0.0.2 as `stdx.ManagedQueue`
 
-
 The `ManagedQueue` is a generic queue implementation that uses a singly linked list. It allows for the management of a queue with operations like enqueueing, dequeueing, checking if the queue is empty, concatenating two queues, and handles the allocation/deallocation of memory used by the queue. The queue is managed by an allocator, which is used for creating and destroying nodes.
 
 See [example](./examples/managed_queue.zig) and [source](./src/managed_queue.zig) for more information on usage.
@@ -229,7 +226,6 @@ See [example](./examples/managed_queue.zig) and [source](./src/managed_queue.zig
 #### UnmanagedQueue
 
 > added v0.0.2 as `stdx.UnmanagedQueue`
-
 
 The `UnmanagedQueue` is a generic queue implementation that uses a singly linked list. It most closely represents the `std.SinglyLinkedList` in its functionality. Differing from the `ManagedQueue`, the `UnmanagedQueue` requires memory allocations to be external to the queue and provides a generic `Node` structure to help link everything together.
 
