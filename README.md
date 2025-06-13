@@ -60,7 +60,7 @@ You can install `stdx` just like any other `zig` dependency by editing your `bui
     .dependencies = .{
         .stdx = .{
             // the latest version of the library is v0.0.2
-            .url = "https://github.com/kobolds-io/stdx/archive/refs/tags/v0.0.7.tar.gz",
+            .url = "https://github.com/kobolds-io/stdx/archive/refs/tags/v0.0.8.tar.gz",
             .hash = "",
         },
     },
@@ -196,7 +196,7 @@ See [example](./examples/unbuffered_channel.zig) and [source](./src/unbuffered_c
 
 #### Signal
 
-> TBD
+> added v0.0.8 as `stdx.Signal`
 
 The `Signal` is a structure that can be used to safely transmit data across threads. Unlike a channel, it does not require that both threads become synchronized at the same point. Think of a `Signal` as a way for a sender to throw a value over the fence and a receiver to pick the value at a later time (when it is convenient for the receiver). `Signal`s are "one shots", meaning that they should only ever be used once. These structures are ideal for things like `request`->`reply` kinds of problems.
 
