@@ -48,8 +48,6 @@ pub fn MemoryPool(comptime T: type) type {
         mutex: std.Thread.Mutex,
 
         pub fn init(allocator: std.mem.Allocator, capacity: usize) !Self {
-            assert(capacity > 0);
-
             var free_queue = try RingBuffer(*T).init(allocator, capacity);
             errdefer free_queue.deinit();
 
@@ -68,6 +66,9 @@ pub fn MemoryPool(comptime T: type) type {
                 try free_queue.enqueue(v);
             }
 
+            // if the backing buffer does not match the free queue, this means that the memory pool
+            // will fundementally not work. We would have returned an allocation error already upon
+            // creating the backing_buffer and the free_queue. This is purely a sanity check.
             assert(backing_buffer.items.len == free_queue.count);
 
             return Self{
