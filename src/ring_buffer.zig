@@ -51,6 +51,9 @@ pub fn RingBuffer(comptime T: type) type {
             return self.capacity - self.count;
         }
 
+        /// Prepend a single item at the `head` position of the ring buffer. If there
+        /// is no available slot in the ring buffer `prepend` returns an error. Every
+        /// prepended item increments the ring buffer `count`
         pub fn prepend(self: *Self, value: T) RingBufferError!void {
             if (self.isFull()) return RingBufferError.BufferFull;
 
