@@ -48,8 +48,6 @@ pub fn MemoryPool(comptime T: type) type {
         mutex: std.Thread.Mutex,
 
         pub fn init(allocator: std.mem.Allocator, capacity: usize) !Self {
-            assert(capacity > 0);
-
             var free_queue = try RingBuffer(*T).init(allocator, capacity);
             errdefer free_queue.deinit();
 
