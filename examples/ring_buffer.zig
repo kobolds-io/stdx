@@ -40,6 +40,15 @@ pub fn main() !void {
 
     assert(dequeued_items_count == out.len);
 
+    const new_head_value: u64 = 8601;
+    assert(ring_buffer.count > 0);
+
+    // prepend an item
+    try ring_buffer.prepend(new_head_value);
+
+    // dequeue the head item
+    assert(new_head_value == ring_buffer.dequeue().?);
+
     // reset the ring buffer
     ring_buffer.reset();
 

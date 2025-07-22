@@ -8,6 +8,30 @@ const testing = std.testing;
 
 const RingBuffer = stdx.RingBuffer;
 
+const BenchmarkRingBufferPrepend = struct {
+    const Self = @This();
+
+    list: *std.ArrayList(usize),
+    ring_buffer: *RingBuffer(usize),
+
+    fn new(list: *std.ArrayList(usize), ring_buffer: *RingBuffer(usize)) Self {
+        return .{
+            .list = list,
+            .ring_buffer = ring_buffer,
+        };
+    }
+
+    pub fn run(self: Self, _: std.mem.Allocator) void {
+        // prepend every data point in the list into the ring buffer
+        for (self.list.items) |data| {
+            self.ring_buffer.prepend(data) catch unreachable;
+        }
+
+        // drop ALL references immediately
+        self.ring_buffer.reset();
+    }
+};
+
 const BenchmarkRingBufferEnqueue = struct {
     const Self = @This();
 
@@ -138,6 +162,7 @@ const BenchmarkRingBufferCopy = struct {
     }
 };
 
+var ring_buffer_prepend: RingBuffer(usize) = undefined;
 var ring_buffer_enqueue: RingBuffer(usize) = undefined;
 var ring_buffer_enqueueMany: RingBuffer(usize) = undefined;
 var ring_buffer_dequeue: RingBuffer(usize) = undefined;
@@ -216,6 +241,9 @@ test "RingBuffer benchmarks" {
     }
 
     // Initialize all ring buffers used in benchmarks
+    ring_buffer_prepend = try RingBuffer(usize).init(allocator, @intCast(data_list.items.len));
+    defer ring_buffer_prepend.deinit();
+
     ring_buffer_enqueue = try RingBuffer(usize).init(allocator, @intCast(data_list.items.len));
     defer ring_buffer_enqueue.deinit();
 
@@ -239,6 +267,13 @@ test "RingBuffer benchmarks" {
 
     ring_buffer_copy_other = try RingBuffer(usize).init(allocator, @intCast(data_list.items.len));
     defer ring_buffer_copy_other.deinit();
+
+    const ring_buffer_prepend_title = try std.fmt.allocPrint(
+        allocator,
+        "prepend {} items",
+        .{constants.benchmark_max_queue_data_list},
+    );
+    defer allocator.free(ring_buffer_prepend_title);
 
     const ring_buffer_enqueue_title = try std.fmt.allocPrint(
         allocator,
@@ -283,6 +318,11 @@ test "RingBuffer benchmarks" {
     defer allocator.free(ring_buffer_copy_title);
 
     // register all the benchmark tests
+    try bench.addParam(
+        ring_buffer_prepend_title,
+        &BenchmarkRingBufferPrepend.new(&data_list, &ring_buffer_prepend),
+        .{},
+    );
     try bench.addParam(
         ring_buffer_enqueue_title,
         &BenchmarkRingBufferEnqueue.new(&data_list, &ring_buffer_enqueue),

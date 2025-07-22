@@ -1,7 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
 
-pub const Error = error{
+pub const RingBufferError = error{
     BufferFull,
 };
 
@@ -51,13 +51,22 @@ pub fn RingBuffer(comptime T: type) type {
             return self.capacity - self.count;
         }
 
+        /// Prepend a single item at the `head` position of the ring buffer. If there
+        /// is no available slot in the ring buffer `prepend` returns an error. Every
+        /// prepended item increments the ring buffer `count`
+        pub fn prepend(self: *Self, value: T) RingBufferError!void {
+            if (self.isFull()) return RingBufferError.BufferFull;
+
+            self.head = (self.head + self.capacity - 1) % self.capacity;
+            self.buffer[self.head] = value;
+            self.count += 1;
+        }
+
         /// Enqueue a single item at the `tail` position of the ring buffer. If there
         /// is no available slot in the ring buffer `enqueue` returns an error. Every
         /// enqueued item increments the ring buffer `count`.
-        pub fn enqueue(self: *Self, value: T) Error!void {
-            if (self.isFull()) {
-                return Error.BufferFull;
-            }
+        pub fn enqueue(self: *Self, value: T) RingBufferError!void {
+            if (self.isFull()) return RingBufferError.BufferFull;
 
             self.buffer[self.tail] = value;
             self.tail = (self.tail + 1) % self.capacity;
@@ -120,7 +129,7 @@ pub fn RingBuffer(comptime T: type) type {
         /// preserving the order of items as they appeared in `other`.
         /// The operation is destructive to `other`
         pub fn concatenate(self: *Self, other: *Self) !void {
-            if (self.available() < other.count) return Error.BufferFull;
+            if (self.available() < other.count) return RingBufferError.BufferFull;
 
             const capacity = self.capacity;
 
@@ -166,7 +175,7 @@ pub fn RingBuffer(comptime T: type) type {
         /// and the contents of `other`.
         /// This operation is not destructive to `other`
         pub fn copy(self: *Self, other: *Self) !void {
-            if (self.available() < other.count) return Error.BufferFull;
+            if (self.available() < other.count) return RingBufferError.BufferFull;
 
             var i: usize = 0;
             while (i < other.count) : (i += 1) {
@@ -356,6 +365,33 @@ test "reset" {
     }
 }
 
+test "prepend" {
+    const allocator = testing.allocator;
+
+    var ring_buffer = try RingBuffer(u8).init(allocator, 10);
+    defer ring_buffer.deinit();
+
+    const test_value: u8 = 231;
+
+    // fill the remaining capacity of the ring buffer with this value
+    ring_buffer.fill(33);
+    try testing.expectEqual(0, ring_buffer.available());
+
+    // Make room in the ring_buffer
+    try testing.expectEqual(33, ring_buffer.dequeue().?);
+    try testing.expectEqual(1, ring_buffer.available());
+
+    try ring_buffer.prepend(test_value);
+
+    try testing.expectEqual(0, ring_buffer.available());
+
+    try testing.expectEqual(true, ring_buffer.isFull());
+    try testing.expectError(RingBufferError.BufferFull, ring_buffer.prepend(test_value));
+
+    // dequeue the item at the had of the queue
+    try testing.expectEqual(test_value, ring_buffer.dequeue().?);
+}
+
 test "enqueue" {
     const allocator = testing.allocator;
 
@@ -374,7 +410,7 @@ test "enqueue" {
     ring_buffer.fill(33);
 
     try testing.expectEqual(true, ring_buffer.isFull());
-    try testing.expectError(Error.BufferFull, ring_buffer.enqueue(test_value));
+    try testing.expectError(RingBufferError.BufferFull, ring_buffer.enqueue(test_value));
 }
 
 test "dequeue" {
@@ -513,7 +549,7 @@ test "copy fails when not enough space in destination" {
 
     // Try copying into a smaller destination
     const result = dest.copy(&src);
-    try testing.expectError(Error.BufferFull, result);
+    try testing.expectError(RingBufferError.BufferFull, result);
 
     // Destination should still be empty
     try testing.expectEqual(true, dest.isEmpty());
