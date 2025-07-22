@@ -1,7 +1,6 @@
 const std = @import("std");
 const testing = std.testing;
 const assert = std.debug.assert;
-const atomic = std.atomic;
 
 /// A generic node used within the `UnmanagedQueue` to store data of type `T`.
 ///
