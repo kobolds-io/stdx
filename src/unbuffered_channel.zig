@@ -64,7 +64,6 @@ pub fn UnbufferedChannel(comptime T: type) type {
                 }
 
                 const remaining: u64 = @intCast(deadline - now);
-                assert(remaining > 0);
                 try self.condition.timedWait(&self.mutex, remaining);
             }
 
