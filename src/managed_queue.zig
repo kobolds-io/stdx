@@ -44,6 +44,7 @@ pub fn ManagedQueue(comptime T: type) type {
                 self.allocator.destroy(node);
             }
 
+            // Ensure that the queue is fully deinitialized
             assert(self.head == null);
             assert(self.tail == null);
             assert(self.count == 0);
