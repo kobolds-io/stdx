@@ -104,59 +104,60 @@ Example output
   Operating System: linux x86_64
   CPU:              13th Gen Intel(R) Core(TM) i9-13900K
   CPU Cores:        24
-  Total Memory:     23.298GiB
+  Total Memory:     23.299GiB
 --------------------------------------------------------
 
 |----------------------------|
 | BufferedChannel Benchmarks |
 |----------------------------|
-benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995      
+benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995
 -----------------------------------------------------------------------------------------------------------------------------
-send 10000 items       65535    6.023s         91.911us ± 9.739us     (84.589us ... 1.224ms)       92.753us   117.245us  127.908us 
-receive 10000 items    65535    5.252s         80.149us ± 81.776us    (74.105us ... 20.92ms)       78.253us   100.384us  110.577us 
+send 10000 items       65535    5.989s         91.4us ± 11.739us      (89.19us ... 1.416ms)        91.067us   115.833us  125.624us
+receive 10000 items    65535    5.232s         79.847us ± 8.731us     (78.137us ... 1.367ms)       78.548us   100.96us   111.411us
 
 |-------------------------|
 | EventEmitter Benchmarks |
 |-------------------------|
-benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995      
+benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995
 -----------------------------------------------------------------------------------------------------------------------------
-emit 1 listeners 10000 65535    1.348s         20.57us ± 5.868us      (18.989us ... 1.277ms)       20.086us   28.444us   34.267us  
-emit 10 listeners 1000 65535    6.699s         102.221us ± 8.004us    (94.788us ... 651.443us)     101.171us  131.12us   141.943us 
-emit 100 listeners 100 65535    1m4.102s       978.141us ± 170.618us  (801.628us ... 42.85ms)      979.128us  1.109ms    1.153ms   
+emit 1 listeners 10000 65535    1.346s         20.549us ± 3.587us     (20.003us ... 329.217us)     20.085us   29.847us   34.043us
+emit 10 listeners 1000 65535    6.726s         102.638us ± 34.653us   (99.95us ... 8.48ms)         102.356us  127.24us   138.36us
+emit 100 listeners 100 65535    1m10.279ms     915.698us ± 110.667us  (790.656us ... 17.928ms)     962.411us  1.179ms    1.334ms
 
 |-----------------------|
 | MemoryPool Benchmarks |
 |-----------------------|
-benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995      
+benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995
 -----------------------------------------------------------------------------------------------------------------------------
-create 10000 items     65535    11.195s        170.832us ± 14.034us   (154.051us ... 782.661us)    173.37us   210.343us  226.573us 
-unsafeCreate 10000 ite 65535    9.1s           138.859us ± 18.31us    (125.438us ... 3.193ms)      139.498us  177.102us  194.618us 
+create 10000 items     65535    11.67s         178.077us ± 22.824us   (159.482us ... 1.651ms)      179.279us  246.009us  274.512us
+unsafeCreate 10000 ite 65535    9.308s         142.031us ± 23.237us   (132.707us ... 3.915ms)      142.679us  194.587us  229.532us
 
 |-----------------------|
 | RingBuffer Benchmarks |
 |-----------------------|
-benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995      
+benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995
 -----------------------------------------------------------------------------------------------------------------------------
-enqueue 10000 items    65535    2.09s          31.895us ± 5.643us     (29.393us ... 591.054us)     31.035us   44.913us   56.298us  
-enqueueMany 10000 item 65535    2.081s         31.762us ± 4.208us     (29.366us ... 249.166us)     30.996us   42.863us   52.171us  
-dequeue 10000 items    65535    1.038s         15.842us ± 3.086us     (14.645us ... 191.955us)     15.483us   22.757us   27.744us  
-dequeueMany 10000 item 65535    2.075s         31.669us ± 4.581us     (29.301us ... 596.145us)     30.946us   42.096us   48.55us   
-concatenate 10000 item 65535    2.129s         32.496us ± 6.142us     (29.688us ... 999.682us)     31.736us   45.44us    54.384us  
-copy 10000 items       65535    2.198s         33.54us ± 5.096us      (29.758us ... 322.781us)     33.474us   45.536us   56.505us  
+prepend 10000 items    65535    2.21s          33.724us ± 6.693us     (32.772us ... 921.192us)     32.859us   48.35us    62.573us
+enqueue 10000 items    65535    2.106s         32.141us ± 44.638us    (30.985us ... 11.314ms)      31.033us   48.031us   62.474us
+enqueueMany 10000 item 65535    2.081s         31.76us ± 5.637us      (30.932us ... 476.249us)     30.962us   43.694us   54.865us
+dequeue 10000 items    65535    1.088s         16.606us ± 185.346us   (15.443us ... 47.448ms)      15.483us   23.447us   28.69us
+dequeueMany 10000 item 65535    2.084s         31.814us ± 7.016us     (30.902us ... 1.01ms)        30.952us   45.395us   60.281us
+concatenate 10000 item 65535    2.138s         32.637us ± 6.718us     (30.942us ... 596.877us)     31.822us   48.299us   61.407us
+copy 10000 items       65535    2.201s         33.598us ± 6.985us     (30.993us ... 654.579us)     33.337us   48.853us   62.789us
 
 |-------------------|
 | Signal Benchmarks |
 |-------------------|
-benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995      
+benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995
 -----------------------------------------------------------------------------------------------------------------------------
-send/receive 10000 ite 65535    10.305s        157.253us ± 97.686us   (145.048us ... 24.931ms)     156.48us   196.237us  218.677us 
+send/receive 10000 ite 65535    10.347s        157.892us ± 19.489us   (152.959us ... 1.423ms)      156.582us  215.874us  247.217us
 
 |------------------------------|
 | UnbufferedChannel Benchmarks |
 |------------------------------|
-benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995      
+benchmark              runs     total time     time/run (avg ± σ)     (min ... max)                p75        p99        p995
 -----------------------------------------------------------------------------------------------------------------------------
-send/receive 10000 ite 65535    19.194s        292.884us ± 19.063us   (272.291us ... 1.49ms)       293.928us  340.837us  364.945us
+send/receive 10000 ite 65535    19.339s        295.095us ± 21.683us   (287.13us ... 1.575ms)       297.506us  360.318us  392.526us
 ```
 
 ## Contributing
@@ -207,8 +208,7 @@ See [example](./examples/signal.zig) and [source](./src/signal.zig) for more inf
 
 > added v0.0.6 as `stdx.EventEmitter`
 
-
-The `EventEmitter` is a tool for managing communications across callbacks. This is a very similar implementation to the nodejs event emitter class which is one of the fundemental building blocks for asynchronous events. The `EventEmitter` provides a simple(ish) api to register `Callback`s with appropriate `Context`s to be called when a specific `Event` is called. 
+The `EventEmitter` is a tool for managing communications across callbacks. This is a very similar implementation to the nodejs event emitter class which is one of the fundemental building blocks for asynchronous events. The `EventEmitter` provides a simple(ish) api to register `Callback`s with appropriate `Context`s to be called when a specific `Event` is called.
 
 See [example](./examples/event_emitter.zig) and [source](./src/event_emitter.zig) for more information on usage.
 
