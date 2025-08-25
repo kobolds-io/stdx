@@ -68,11 +68,12 @@ test "UnbufferedChannel benchmarks" {
         .{},
     );
 
-    // Write the results to stderr
-    const stderr = std.io.getStdErr().writer();
-    try stderr.writeAll("\n");
-    try stderr.writeAll("|------------------------------|\n");
-    try stderr.writeAll("| UnbufferedChannel Benchmarks |\n");
-    try stderr.writeAll("|------------------------------|\n");
-    try bench.run(stderr);
+    var stderr = std.fs.File.stderr().writerStreaming(&.{});
+    const writer = &stderr.interface;
+
+    try writer.writeAll("\n");
+    try writer.writeAll("-------------------------------|\n");
+    try writer.writeAll("| UnbufferedChannel Benchmarks |\n");
+    try writer.writeAll("|------------------------------|\n");
+    try bench.run(writer);
 }
