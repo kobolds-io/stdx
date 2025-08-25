@@ -18,12 +18,12 @@ pub fn EventEmitter(
         };
 
         allocator: std.mem.Allocator,
-        listeners: std.AutoHashMap(Event, *std.ArrayList(Listener)),
+        listeners: std.AutoHashMap(Event, *std.array_list.Managed(Listener)),
 
         pub fn init(allocator: std.mem.Allocator) Self {
             return Self{
                 .allocator = allocator,
-                .listeners = std.AutoHashMap(Event, *std.ArrayList(Listener)).init(allocator),
+                .listeners = std.AutoHashMap(Event, *std.array_list.Managed(Listener)).init(allocator),
             };
         }
 
@@ -45,10 +45,10 @@ pub fn EventEmitter(
                 try listeners_list.append(.{ .context = context, .callback = callback });
             } else {
                 // create a new list
-                const listener_list = try self.allocator.create(std.ArrayList(Listener));
+                const listener_list = try self.allocator.create(std.array_list.Managed(Listener));
                 errdefer self.allocator.destroy(listener_list);
 
-                listener_list.* = try std.ArrayList(Listener).initCapacity(self.allocator, 1);
+                listener_list.* = try std.array_list.Managed(Listener).initCapacity(self.allocator, 1);
                 errdefer listener_list.deinit();
 
                 listener_list.appendAssumeCapacity(.{ .context = context, .callback = callback });

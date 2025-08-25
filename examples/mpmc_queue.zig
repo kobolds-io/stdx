@@ -63,7 +63,7 @@ pub fn Producer(comptime T: type) type {
         const Self = @This();
 
         allocator: std.mem.Allocator,
-        backpressure: std.ArrayList(VALUE_TYPE),
+        backpressure: std.array_list.Managed(VALUE_TYPE),
         close_channel: UnbufferedChannel(bool),
         id: usize,
         mutex: std.Thread.Mutex,
@@ -80,7 +80,7 @@ pub fn Producer(comptime T: type) type {
 
             return Self{
                 .allocator = allocator,
-                .backpressure = std.ArrayList(VALUE_TYPE).init(allocator),
+                .backpressure = std.array_list.Managed(VALUE_TYPE).init(allocator),
                 .close_channel = UnbufferedChannel(bool).new(),
                 .id = id,
                 .mutex = .{},
@@ -148,7 +148,7 @@ pub fn Producer(comptime T: type) type {
                 }
 
                 self.tick() catch unreachable;
-                std.time.sleep(1 * std.time.ns_per_us);
+                std.Thread.sleep(1 * std.time.ns_per_us);
             }
         }
 
@@ -213,7 +213,7 @@ pub fn Worker(comptime T: type) type {
                 }
 
                 self.tick() catch unreachable;
-                std.time.sleep(1 * std.time.ns_per_us);
+                std.Thread.sleep(1 * std.time.ns_per_us);
             }
         }
 
@@ -231,10 +231,10 @@ pub fn main() !void {
     var topic = try Topic(VALUE_TYPE).init(allocator);
     defer topic.deinit();
 
-    var producers = std.ArrayList(*Producer(VALUE_TYPE)).init(allocator);
+    var producers = std.array_list.Managed(*Producer(VALUE_TYPE)).init(allocator);
     defer producers.deinit();
 
-    var workers = std.ArrayList(*Worker(VALUE_TYPE)).init(allocator);
+    var workers = std.array_list.Managed(*Worker(VALUE_TYPE)).init(allocator);
     defer workers.deinit();
 
     for (0..PRODUCER_COUNT) |i| {
@@ -292,7 +292,7 @@ pub fn main() !void {
         for (producers.items) |producer| {
             producer.produce(&sardine) catch {
                 log.err("producer: {} throttling", .{producer.id});
-                std.time.sleep(100 * std.time.ns_per_ms);
+                std.Thread.sleep(100 * std.time.ns_per_ms);
                 try producer.produce(&sardine);
             };
         }
@@ -301,7 +301,7 @@ pub fn main() !void {
     var produced_count: u128 = 0;
 
     while (produced_count != ITERATIONS * PRODUCER_COUNT) {
-        std.time.sleep(1 * std.time.ns_per_ms);
+        std.Thread.sleep(1 * std.time.ns_per_ms);
         produced_count = 0;
         for (producers.items) |producer| {
             produced_count += producer.produced_count;
@@ -310,7 +310,7 @@ pub fn main() !void {
 
     var processed_count: u128 = 0;
     while (processed_count != produced_count) {
-        std.time.sleep(1 * std.time.ns_per_ms);
+        std.Thread.sleep(1 * std.time.ns_per_ms);
         processed_count = 0;
         for (workers.items) |worker| {
             processed_count += worker.processed_count;

@@ -11,10 +11,10 @@ const BufferedChannel = stdx.BufferedChannel;
 const BenchmarkBufferedChannelSend = struct {
     const Self = @This();
 
-    list: *std.ArrayList(usize),
+    list: *std.array_list.Managed(usize),
     channel: *BufferedChannel(usize),
 
-    fn new(list: *std.ArrayList(usize), channel: *BufferedChannel(usize)) Self {
+    fn new(list: *std.array_list.Managed(usize), channel: *BufferedChannel(usize)) Self {
         return .{
             .list = list,
             .channel = channel,
@@ -31,10 +31,10 @@ const BenchmarkBufferedChannelSend = struct {
 const BenchmarkBufferedChannelReceive = struct {
     const Self = @This();
 
-    list: *std.ArrayList(usize),
+    list: *std.array_list.Managed(usize),
     channel: *BufferedChannel(usize),
 
-    fn new(list: *std.ArrayList(usize), channel: *BufferedChannel(usize)) Self {
+    fn new(list: *std.array_list.Managed(usize), channel: *BufferedChannel(usize)) Self {
         return .{
             .list = list,
             .channel = channel,
@@ -51,7 +51,7 @@ const BenchmarkBufferedChannelReceive = struct {
 var send_channel: BufferedChannel(usize) = undefined;
 var receive_channel: BufferedChannel(usize) = undefined;
 
-var data_list: std.ArrayList(usize) = undefined;
+var data_list: std.array_list.Managed(usize) = undefined;
 const allocator = testing.allocator;
 
 fn beforeEachSend() void {
@@ -72,7 +72,7 @@ test "Channel benchmarks" {
     defer bench.deinit();
 
     // Create a list of `n` length that will be used/reused by each benchmarking test
-    data_list = try std.ArrayList(usize).initCapacity(
+    data_list = try std.array_list.Managed(usize).initCapacity(
         allocator,
         constants.benchmark_max_queue_data_list,
     );
@@ -123,11 +123,12 @@ test "Channel benchmarks" {
         },
     );
 
-    // Write the results to stderr
-    const stderr = std.io.getStdErr().writer();
-    try stderr.writeAll("\n");
-    try stderr.writeAll("|----------------------------|\n");
-    try stderr.writeAll("| BufferedChannel Benchmarks |\n");
-    try stderr.writeAll("|----------------------------|\n");
-    try bench.run(stderr);
+    var stderr = std.fs.File.stderr().writerStreaming(&.{});
+    const writer = &stderr.interface;
+
+    try writer.writeAll("\n");
+    try writer.writeAll("|----------------------------|\n");
+    try writer.writeAll("| BufferedChannel Benchmarks |\n");
+    try writer.writeAll("|----------------------------|\n");
+    try bench.run(writer);
 }

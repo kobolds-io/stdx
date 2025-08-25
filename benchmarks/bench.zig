@@ -2,10 +2,12 @@ const std = @import("std");
 const zbench = @import("zbench");
 
 test "prints system info" {
-    const stderr = std.io.getStdErr().writer();
-    try stderr.writeAll("--------------------------------------------------------\n");
-    try stderr.print("{}", .{try zbench.getSystemInfo()});
-    try stderr.writeAll("--------------------------------------------------------\n");
+    var stderr = std.fs.File.stderr().writerStreaming(&.{});
+    const writer = &stderr.interface;
+
+    try writer.writeAll("--------------------------------------------------------\n");
+    try writer.print("{f}", .{try zbench.getSystemInfo()});
+    try writer.writeAll("--------------------------------------------------------\n");
 }
 
 comptime {
