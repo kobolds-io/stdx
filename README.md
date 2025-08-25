@@ -59,13 +59,13 @@ You can install `stdx` just like any other `zig` dependency by editing your `bui
 ```zig
     .dependencies = .{
         .stdx = .{
-            .url = "https://github.com/kobolds-io/stdx/archive/refs/tags/v0.0.9.tar.gz",
+            .url = "https://github.com/kobolds-io/stdx/archive/refs/tags/v0.0.10.tar.gz",
             .hash = "",
         },
     },
 ```
 
-run `zig build --fetch` to fetch the dependencies. Sometimes `zig` is helpful and it caches stuff for you in the `zig-cache` dir. Try deleting that directory if you see some issues.
+run `zig build --fetch` to fetch the dependencies. This will return an error as the has will not match. Copy the new hash and try again.Sometimes `zig` is helpful and it caches stuff for you in the `zig-cache` dir. Try deleting that directory if you see some issues.
 
 ## Organization
 
