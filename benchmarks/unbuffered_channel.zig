@@ -11,10 +11,10 @@ const UnbufferedChannel = stdx.UnbufferedChannel;
 const BenchmarkUnbufferedChannelSendReceive = struct {
     const Self = @This();
 
-    list: *std.ArrayList(usize),
+    list: *std.array_list.Managed(usize),
     channel: *UnbufferedChannel(usize),
 
-    fn new(list: *std.ArrayList(usize), channel: *UnbufferedChannel(usize)) Self {
+    fn new(list: *std.array_list.Managed(usize), channel: *UnbufferedChannel(usize)) Self {
         return .{
             .list = list,
             .channel = channel,
@@ -32,7 +32,7 @@ const BenchmarkUnbufferedChannelSendReceive = struct {
 
 var simple_channel: UnbufferedChannel(usize) = undefined;
 
-var data_list: std.ArrayList(usize) = undefined;
+var data_list: std.array_list.Managed(usize) = undefined;
 const allocator = testing.allocator;
 
 test "UnbufferedChannel benchmarks" {
@@ -43,7 +43,7 @@ test "UnbufferedChannel benchmarks" {
     defer bench.deinit();
 
     // Create a list of `n` length that will be used/reused by each benchmarking test
-    data_list = try std.ArrayList(usize).initCapacity(
+    data_list = try std.array_list.Managed(usize).initCapacity(
         allocator,
         constants.benchmark_max_queue_data_list,
     );

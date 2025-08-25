@@ -28,7 +28,7 @@ const CONSUMER_COUNT = 100;
 const PRODUCER_COUNT = 10;
 
 pub fn doProduce(
-    producers: *std.ArrayList(*Producer(VALUE_TYPE)),
+    producers: *std.array_list.Managed(*Producer(VALUE_TYPE)),
     iterations: usize,
     value: VALUE_TYPE,
     ready_channel: *UnbufferedChannel(bool),
@@ -42,7 +42,7 @@ pub fn doProduce(
             // try to produce an item
             producer.produce(value) catch {
                 // this producer is too fast
-                std.time.sleep(1 * std.time.ns_per_ms);
+                std.Thread.sleep(1 * std.time.ns_per_ms);
 
                 continue;
             };
@@ -59,8 +59,8 @@ pub fn Bus(comptime T: type) type {
         allocator: std.mem.Allocator,
         mutex: std.Thread.Mutex,
         queue: *RingBuffer(T),
-        consumers: *std.ArrayList(*Consumer(T)),
-        producers: *std.ArrayList(*Producer(T)),
+        consumers: *std.array_list.Managed(*Consumer(T)),
+        producers: *std.array_list.Managed(*Producer(T)),
         close_channel: UnbufferedChannel(bool),
         last_producer_index: usize,
 
@@ -71,16 +71,16 @@ pub fn Bus(comptime T: type) type {
             queue.* = try RingBuffer(T).init(allocator, BUS_QUEUE_SIZE);
             errdefer queue.deinit();
 
-            const consumers = try allocator.create(std.ArrayList(*Consumer(T)));
+            const consumers = try allocator.create(std.array_list.Managed(*Consumer(T)));
             errdefer allocator.destroy(consumers);
 
-            consumers.* = std.ArrayList(*Consumer(T)).init(allocator);
+            consumers.* = std.array_list.Managed(*Consumer(T)).init(allocator);
             errdefer consumers.deinit();
 
-            const producers = try allocator.create(std.ArrayList(*Producer(T)));
+            const producers = try allocator.create(std.array_list.Managed(*Producer(T)));
             errdefer allocator.destroy(producers);
 
-            producers.* = std.ArrayList(*Producer(T)).init(allocator);
+            producers.* = std.array_list.Managed(*Producer(T)).init(allocator);
             errdefer producers.deinit();
 
             return Self{
@@ -185,7 +185,7 @@ pub fn Bus(comptime T: type) type {
                 }
 
                 self.tick() catch unreachable;
-                std.time.sleep(1 * std.time.ns_per_us);
+                std.Thread.sleep(1 * std.time.ns_per_us);
             }
         }
 
@@ -253,7 +253,7 @@ pub fn Consumer(comptime T: type) type {
                 }
 
                 self.tick() catch unreachable;
-                std.time.sleep(1 * std.time.ns_per_us);
+                std.Thread.sleep(1 * std.time.ns_per_us);
             }
         }
 
@@ -315,10 +315,10 @@ pub fn main() !void {
     var bus = try Bus(VALUE_TYPE).init(allocator);
     defer bus.deinit();
 
-    var consumers = std.ArrayList(*Consumer(VALUE_TYPE)).init(allocator);
+    var consumers = std.array_list.Managed(*Consumer(VALUE_TYPE)).init(allocator);
     defer consumers.deinit();
 
-    var producers = std.ArrayList(*Producer(VALUE_TYPE)).init(allocator);
+    var producers = std.array_list.Managed(*Producer(VALUE_TYPE)).init(allocator);
     defer producers.deinit();
 
     var bus_ready_channel = UnbufferedChannel(bool).new();
@@ -333,7 +333,7 @@ pub fn main() !void {
     _ = bus_ready_channel.receive();
     defer bus.close();
 
-    std.time.sleep(500 * std.time.ns_per_ms);
+    std.Thread.sleep(500 * std.time.ns_per_ms);
 
     // spawn all the consumers
     for (0..CONSUMER_COUNT) |i| {
@@ -395,7 +395,7 @@ pub fn main() !void {
 
     var total_items_produced: u128 = 0;
     while (total_items_produced != ITERATIONS * PRODUCER_COUNT) {
-        std.time.sleep(1 * std.time.ns_per_ms);
+        std.Thread.sleep(1 * std.time.ns_per_ms);
         total_items_produced = 0;
         for (producers.items) |producer| {
             total_items_produced += producer.produced_count;
@@ -404,7 +404,7 @@ pub fn main() !void {
 
     var total_items_consumed: u128 = 0;
     while (total_items_consumed != ITERATIONS * PRODUCER_COUNT * CONSUMER_COUNT) {
-        std.time.sleep(1 * std.time.ns_per_ms);
+        std.Thread.sleep(1 * std.time.ns_per_ms);
         total_items_consumed = 0;
         for (consumers.items) |consumer| {
             total_items_consumed += consumer.consumed_count;

@@ -28,11 +28,13 @@ pub fn build(b: *std.Build) void {
 }
 
 fn setupLibrary(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
-    const lib = b.addStaticLibrary(.{
+    const lib = b.addLibrary(.{
         .name = "stdx",
-        .root_source_file = b.path("src/stdx.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/stdx.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
         .version = version,
     });
 
@@ -41,9 +43,11 @@ fn setupLibrary(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.b
 
 fn setupTests(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
     const lib_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/test.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
@@ -70,9 +74,11 @@ fn setupExamples(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.
     for (example_names) |example_name| {
         const example_exe = b.addExecutable(.{
             .name = example_name,
-            .root_source_file = b.path(b.fmt("examples/{s}.zig", .{example_name})),
-            .target = target,
-            .optimize = optimize,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(b.fmt("examples/{s}.zig", .{example_name})),
+                .target = target,
+                .optimize = optimize,
+            }),
         });
         const install_example = b.addInstallArtifact(example_exe, .{});
 
@@ -91,9 +97,11 @@ fn setupExamples(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.
 fn setupBenchmarks(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
     const bench_lib = b.addTest(.{
         .name = "bench",
-        .root_source_file = b.path("benchmarks/bench.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("benchmarks/bench.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     const stdx_mod = b.addModule("stdx", .{

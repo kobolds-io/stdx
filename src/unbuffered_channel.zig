@@ -96,7 +96,7 @@ test "good behavior" {
 test "bad behavior" {
     const testerFn = struct {
         fn run(channel: *UnbufferedChannel(u32), value: u32) void {
-            std.time.sleep(500 * std.time.ns_per_ms); // wait too long
+            std.Thread.sleep(500 * std.time.ns_per_ms); // wait too long
             channel.send(value);
         }
     }.run;

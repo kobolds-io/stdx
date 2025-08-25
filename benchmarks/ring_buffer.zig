@@ -11,10 +11,10 @@ const RingBuffer = stdx.RingBuffer;
 const BenchmarkRingBufferPrepend = struct {
     const Self = @This();
 
-    list: *std.ArrayList(usize),
+    list: *std.array_list.Managed(usize),
     ring_buffer: *RingBuffer(usize),
 
-    fn new(list: *std.ArrayList(usize), ring_buffer: *RingBuffer(usize)) Self {
+    fn new(list: *std.array_list.Managed(usize), ring_buffer: *RingBuffer(usize)) Self {
         return .{
             .list = list,
             .ring_buffer = ring_buffer,
@@ -35,10 +35,10 @@ const BenchmarkRingBufferPrepend = struct {
 const BenchmarkRingBufferEnqueue = struct {
     const Self = @This();
 
-    list: *std.ArrayList(usize),
+    list: *std.array_list.Managed(usize),
     ring_buffer: *RingBuffer(usize),
 
-    fn new(list: *std.ArrayList(usize), ring_buffer: *RingBuffer(usize)) Self {
+    fn new(list: *std.array_list.Managed(usize), ring_buffer: *RingBuffer(usize)) Self {
         return .{
             .list = list,
             .ring_buffer = ring_buffer,
@@ -59,10 +59,10 @@ const BenchmarkRingBufferEnqueue = struct {
 const BenchmarkRingBufferEnqueueMany = struct {
     const Self = @This();
 
-    list: *std.ArrayList(usize),
+    list: *std.array_list.Managed(usize),
     ring_buffer: *RingBuffer(usize),
 
-    fn new(list: *std.ArrayList(usize), ring_buffer: *RingBuffer(usize)) Self {
+    fn new(list: *std.array_list.Managed(usize), ring_buffer: *RingBuffer(usize)) Self {
         return .{
             .list = list,
             .ring_buffer = ring_buffer,
@@ -83,10 +83,10 @@ const BenchmarkRingBufferEnqueueMany = struct {
 const BenchmarkRingBufferDequeue = struct {
     const Self = @This();
 
-    list: *std.ArrayList(usize),
+    list: *std.array_list.Managed(usize),
     ring_buffer: *RingBuffer(usize),
 
-    fn new(list: *std.ArrayList(usize), ring_buffer: *RingBuffer(usize)) Self {
+    fn new(list: *std.array_list.Managed(usize), ring_buffer: *RingBuffer(usize)) Self {
         return .{
             .list = list,
             .ring_buffer = ring_buffer,
@@ -102,10 +102,10 @@ const BenchmarkRingBufferDequeue = struct {
 const BenchmarkRingBufferDequeueMany = struct {
     const Self = @This();
 
-    list: *std.ArrayList(usize),
+    list: *std.array_list.Managed(usize),
     ring_buffer: *RingBuffer(usize),
 
-    fn new(list: *std.ArrayList(usize), ring_buffer: *RingBuffer(usize)) Self {
+    fn new(list: *std.array_list.Managed(usize), ring_buffer: *RingBuffer(usize)) Self {
         return .{
             .list = list,
             .ring_buffer = ring_buffer,
@@ -123,11 +123,11 @@ const BenchmarkRingBufferDequeueMany = struct {
 const BenchmarkRingBufferConcatenate = struct {
     const Self = @This();
 
-    list: *std.ArrayList(usize),
+    list: *std.array_list.Managed(usize),
     ring_buffer: *RingBuffer(usize),
     ring_buffer_other: *RingBuffer(usize),
 
-    fn new(list: *std.ArrayList(usize), ring_buffer: *RingBuffer(usize), ring_buffer_other: *RingBuffer(usize)) Self {
+    fn new(list: *std.array_list.Managed(usize), ring_buffer: *RingBuffer(usize), ring_buffer_other: *RingBuffer(usize)) Self {
         return .{
             .list = list,
             .ring_buffer = ring_buffer,
@@ -145,11 +145,11 @@ const BenchmarkRingBufferConcatenate = struct {
 const BenchmarkRingBufferCopy = struct {
     const Self = @This();
 
-    list: *std.ArrayList(usize),
+    list: *std.array_list.Managed(usize),
     ring_buffer: *RingBuffer(usize),
     ring_buffer_other: *RingBuffer(usize),
 
-    fn new(list: *std.ArrayList(usize), ring_buffer: *RingBuffer(usize), ring_buffer_other: *RingBuffer(usize)) Self {
+    fn new(list: *std.array_list.Managed(usize), ring_buffer: *RingBuffer(usize), ring_buffer_other: *RingBuffer(usize)) Self {
         return .{
             .list = list,
             .ring_buffer = ring_buffer,
@@ -172,7 +172,7 @@ var ring_buffer_concatenate_other: RingBuffer(usize) = undefined;
 var ring_buffer_copy: RingBuffer(usize) = undefined;
 var ring_buffer_copy_other: RingBuffer(usize) = undefined;
 
-var data_list: std.ArrayList(usize) = undefined;
+var data_list: std.array_list.Managed(usize) = undefined;
 const allocator = testing.allocator;
 
 fn beforeEachDequeue() void {
@@ -229,7 +229,7 @@ test "RingBuffer benchmarks" {
     defer bench.deinit();
 
     // Create a list of `n` length that will be used/reused by each benchmarking test
-    data_list = try std.ArrayList(usize).initCapacity(
+    data_list = try std.array_list.Managed(usize).initCapacity(
         allocator,
         constants.benchmark_max_queue_data_list,
     );
