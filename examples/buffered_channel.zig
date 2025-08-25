@@ -33,7 +33,7 @@ const FileUploader = struct {
             const chunk = self.bytes[i..end];
             _ = chunk;
 
-            std.time.sleep(delay * std.time.ns_per_ms);
+            std.Thread.sleep(delay * std.time.ns_per_ms);
             total_time_elapsed += delay;
 
             log.debug("file uploader: {} - total bytes uploaded {} bytes - took {}ms", .{ self.id, i, delay });

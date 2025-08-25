@@ -11,10 +11,10 @@ const MemoryPool = @import("stdx").MemoryPool;
 const BenchmarkMemoryPoolCreate = struct {
     const Self = @This();
 
-    list: *std.ArrayList(usize),
+    list: *std.array_list.Managed(usize),
     memory_pool: *MemoryPool(usize),
 
-    fn new(list: *std.ArrayList(usize), memory_pool: *MemoryPool(usize)) Self {
+    fn new(list: *std.array_list.Managed(usize), memory_pool: *MemoryPool(usize)) Self {
         return .{
             .list = list,
             .memory_pool = memory_pool,
@@ -31,10 +31,10 @@ const BenchmarkMemoryPoolCreate = struct {
 const BenchmarkMemoryPoolUnsafeCreate = struct {
     const Self = @This();
 
-    list: *std.ArrayList(usize),
+    list: *std.array_list.Managed(usize),
     memory_pool: *MemoryPool(usize),
 
-    fn new(list: *std.ArrayList(usize), memory_pool: *MemoryPool(usize)) Self {
+    fn new(list: *std.array_list.Managed(usize), memory_pool: *MemoryPool(usize)) Self {
         return .{
             .list = list,
             .memory_pool = memory_pool,
@@ -51,7 +51,7 @@ const BenchmarkMemoryPoolUnsafeCreate = struct {
 var memory_pool_create: MemoryPool(usize) = undefined;
 var memory_pool_unsafe_create: MemoryPool(usize) = undefined;
 
-var data_list: std.ArrayList(usize) = undefined;
+var data_list: std.array_list.Managed(usize) = undefined;
 const allocator = testing.allocator;
 
 fn beforeEachCreate() void {
@@ -80,7 +80,7 @@ test "MemoryPool benchmarks" {
     defer bench.deinit();
 
     // Create a list of `n` length that will be used/reused by each benchmarking test
-    data_list = try std.ArrayList(usize).initCapacity(
+    data_list = try std.array_list.Managed(usize).initCapacity(
         allocator,
         constants.benchmark_max_queue_data_list,
     );
@@ -130,11 +130,12 @@ test "MemoryPool benchmarks" {
         },
     );
 
-    // Write the results to stderr
-    const stderr = std.io.getStdErr().writer();
-    try stderr.writeAll("\n");
-    try stderr.writeAll("|-----------------------|\n");
-    try stderr.writeAll("| MemoryPool Benchmarks |\n");
-    try stderr.writeAll("|-----------------------|\n");
-    try bench.run(stderr);
+    var stderr = std.fs.File.stderr().writerStreaming(&.{});
+    const writer = &stderr.interface;
+
+    try writer.writeAll("\n");
+    try writer.writeAll("|-----------------------|\n");
+    try writer.writeAll("| MemoryPool Benchmarks |\n");
+    try writer.writeAll("|-----------------------|\n");
+    try bench.run(writer);
 }

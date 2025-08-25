@@ -97,7 +97,7 @@ const AsyncCalculator = struct {
                     }
 
                     // This is the tick rate and completely arbitrary
-                    std.time.sleep(1 * std.time.ns_per_ms);
+                    std.Thread.sleep(1 * std.time.ns_per_ms);
                 },
                 .closing => {
                     self.state = .closed;
@@ -144,11 +144,11 @@ pub fn main() !void {
     };
 
     // at this point we know that the calculator is running
-    var signals = std.ArrayList(*Signal(Reply)).init(allocator);
+    var signals = std.array_list.Managed(*Signal(Reply)).init(allocator);
     defer signals.deinit();
 
     // at this point we know that the calculator is running
-    var requests = std.ArrayList(Request).init(allocator);
+    var requests = std.array_list.Managed(Request).init(allocator);
     defer requests.deinit();
 
     // everything is setup now
