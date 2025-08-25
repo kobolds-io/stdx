@@ -33,10 +33,10 @@ const TestContext = struct {
 const BenchmarkEventEmitterEmit = struct {
     const Self = @This();
 
-    list: *std.ArrayList(usize),
+    list: *std.array_list.Managed(usize),
     ee: *EventEmitter(TestEvent, *TestContext, i128),
 
-    fn new(list: *std.ArrayList(usize), ee: *EventEmitter(TestEvent, *TestContext, i128)) Self {
+    fn new(list: *std.array_list.Managed(usize), ee: *EventEmitter(TestEvent, *TestContext, i128)) Self {
         return .{
             .list = list,
             .ee = ee,
@@ -54,12 +54,12 @@ var event_emitter_emit_1: EventEmitter(TestEvent, *TestContext, i128) = undefine
 var test_context_emit_1 = TestContext{};
 
 var event_emitter_emit_10: EventEmitter(TestEvent, *TestContext, i128) = undefined;
-var test_contexts_emit_10_list: std.ArrayList(*TestContext) = undefined;
+var test_contexts_emit_10_list: std.array_list.Managed(*TestContext) = undefined;
 
 var event_emitter_emit_100: EventEmitter(TestEvent, *TestContext, i128) = undefined;
-var test_contexts_emit_100_list: std.ArrayList(*TestContext) = undefined;
+var test_contexts_emit_100_list: std.array_list.Managed(*TestContext) = undefined;
 
-var data_list: std.ArrayList(usize) = undefined;
+var data_list: std.array_list.Managed(usize) = undefined;
 const allocator = testing.allocator;
 
 fn afterEachEmit1() void {
@@ -87,7 +87,7 @@ test "EventEmitter benchmarks" {
     defer bench.deinit();
 
     // Create a list of `n` length that will be used/reused by each benchmarking test
-    data_list = try std.ArrayList(usize).initCapacity(
+    data_list = try std.array_list.Managed(usize).initCapacity(
         allocator,
         constants.benchmark_max_queue_data_list,
     );
@@ -123,7 +123,7 @@ test "EventEmitter benchmarks" {
     event_emitter_emit_10 = EventEmitter(TestEvent, *TestContext, i128).init(allocator);
     defer event_emitter_emit_10.deinit();
 
-    test_contexts_emit_10_list = std.ArrayList(*TestContext).init(allocator);
+    test_contexts_emit_10_list = std.array_list.Managed(*TestContext).init(allocator);
     defer test_contexts_emit_10_list.deinit();
 
     for (0..10) |_| {
@@ -156,7 +156,7 @@ test "EventEmitter benchmarks" {
     event_emitter_emit_100 = EventEmitter(TestEvent, *TestContext, i128).init(allocator);
     defer event_emitter_emit_100.deinit();
 
-    test_contexts_emit_100_list = std.ArrayList(*TestContext).init(allocator);
+    test_contexts_emit_100_list = std.array_list.Managed(*TestContext).init(allocator);
     defer test_contexts_emit_100_list.deinit();
 
     for (0..100) |_| {

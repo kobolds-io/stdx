@@ -164,7 +164,7 @@ test "full behavior" {
             // we are relying on the slow receiver to pull items out of the channel
             // thus opening available slots for the new items
             for (0..chan.capacity() * 2) |_| {
-                std.time.sleep(1 * std.time.ns_per_ms);
+                std.Thread.sleep(1 * std.time.ns_per_ms);
                 chan.send(value);
             }
         }
@@ -175,7 +175,7 @@ test "full behavior" {
         pub fn slowReceive(chan: *BufferedChannel(usize)) void {
             var iters: usize = 0;
             while (!chan.isEmpty()) {
-                std.time.sleep(10 * std.time.ns_per_ms);
+                std.Thread.sleep(10 * std.time.ns_per_ms);
                 _ = chan.receive();
                 iters += 1;
             }
@@ -189,7 +189,7 @@ test "full behavior" {
     defer send_th.join();
 
     // give time to the send_th to spin up
-    std.time.sleep(10 * std.time.ns_per_ms);
+    std.Thread.sleep(10 * std.time.ns_per_ms);
 
     const receive_th = try std.Thread.spawn(.{}, slowReceive, .{&channel});
     defer receive_th.join();
@@ -220,7 +220,7 @@ test "receive timeouts and cancellation" {
     defer cancel_th.join();
 
     // give time to the cancel_th to spin up
-    std.time.sleep(10 * std.time.ns_per_ms);
+    std.Thread.sleep(10 * std.time.ns_per_ms);
     try testing.expectEqual(true, running);
 
     cancel_token.cancel();
@@ -257,7 +257,7 @@ test "send timeouts and cancellation" {
     defer cancel_th.join();
 
     // give time to the cancel_th to spin up
-    std.time.sleep(10 * std.time.ns_per_ms);
+    std.Thread.sleep(10 * std.time.ns_per_ms);
     try testing.expectEqual(true, running);
 
     cancel_token.cancel();
