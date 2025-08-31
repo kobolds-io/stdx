@@ -18,12 +18,12 @@ pub fn EventEmitter(
         };
 
         allocator: std.mem.Allocator,
-        listeners: std.AutoHashMap(Event, *std.array_list.Managed(Listener)),
+        listeners: std.AutoHashMap(Event, *std.ArrayList(Listener)),
 
         pub fn init(allocator: std.mem.Allocator) Self {
             return Self{
                 .allocator = allocator,
-                .listeners = std.AutoHashMap(Event, *std.array_list.Managed(Listener)).init(allocator),
+                .listeners = std.AutoHashMap(Event, *std.ArrayList(Listener)).init(allocator),
             };
         }
 
@@ -33,7 +33,7 @@ pub fn EventEmitter(
                 const listener_list = listener_list_ptr.*;
 
                 // deinit and destroy the list
-                listener_list.deinit();
+                listener_list.deinit(self.allocator);
                 self.allocator.destroy(listener_list);
             }
 
@@ -42,14 +42,14 @@ pub fn EventEmitter(
 
         pub fn addEventListener(self: *Self, context: Context, event: Event, callback: ListenerCallback) !void {
             if (self.listeners.get(event)) |listeners_list| {
-                try listeners_list.append(.{ .context = context, .callback = callback });
+                try listeners_list.append(self.allocator, .{ .context = context, .callback = callback });
             } else {
                 // create a new list
-                const listener_list = try self.allocator.create(std.array_list.Managed(Listener));
+                const listener_list = try self.allocator.create(std.ArrayList(Listener));
                 errdefer self.allocator.destroy(listener_list);
 
-                listener_list.* = try std.array_list.Managed(Listener).initCapacity(self.allocator, 1);
-                errdefer listener_list.deinit();
+                listener_list.* = try std.ArrayList(Listener).initCapacity(self.allocator, 1);
+                errdefer listener_list.deinit(self.allocator);
 
                 listener_list.appendAssumeCapacity(.{ .context = context, .callback = callback });
 

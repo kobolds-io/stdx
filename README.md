@@ -99,66 +99,65 @@ zig build bench -Doptimize=ReleaseFast
 
 Example output
 
-```plaintext
+````plaintext
 --------------------------------------------------------
-  Operating System: linux x86
-  CPU:              12th Gen Intel(R) Core(TM) i7-12700H
-  CPU Cores:        14
-  Total Memory:     31.021GiB
+  Operating System: linux x86_64
+  CPU:              13th Gen Intel(R) Core(TM) i9-13900K
+  CPU Cores:        24
+  Total Memory:     23.299GiB
 --------------------------------------------------------
 
 |----------------------------|
 | BufferedChannel Benchmarks |
 |----------------------------|
-benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
+benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995
 -----------------------------------------------------------------------------------------------------------------------------
-send 10000 items       65535    6.902s         105.324us ± 3.344us   (102.754us ... 260.784us)    104.624us  115.121us  119.248us 
-receive 10000 items    65535    7.739s         118.09us ± 3.686us    (100.845us ... 285.061us)    117.304us  128.697us  133.555us 
+send 10000 items       65535    6.7s           102.245us ± 15.081us  (92.907us ... 2.06ms)        101.26us   146.789us  181.604us
+receive 10000 items    65535    5.173s         78.942us ± 12.868us   (72.408us ... 754.602us)     76.853us   116.748us  149.018us
 
 |-------------------------|
 | EventEmitter Benchmarks |
 |-------------------------|
-benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
+benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995
 -----------------------------------------------------------------------------------------------------------------------------
-emit 1 listeners 10000 65535    4.115s         62.798us ± 2.378us    (57.294us ... 277.264us)     63.252us   68.788us   69.487us  
-emit 10 listeners 1000 65535    15.335s        234.008us ± 13.06us   (210.043us ... 638.419us)    236.551us  280.198us  315.506us 
-emit 100 listeners 100 65535    2m8.851s       1.966ms ± 86.803us    (1.639ms ... 3.713ms)        1.982ms    2.203ms    2.302ms   
+emit 1 listeners 10000 65535    2.114s         32.268us ± 7.384us    (29.488us ... 508.015us)     31.313us   51.688us   66.302us
+emit 10 listeners 1000 65535    7.038s         107.394us ± 16.046us  (98.189us ... 953.352us)     104.31us   167.558us  200.72us
+emit 100 listeners 100 65535    54.549s        832.369us ± 53.19us   (770.476us ... 5.842ms)      835.271us  988.79us   1.067ms
 
 |-----------------------|
 | MemoryPool Benchmarks |
 |-----------------------|
-benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
+benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995
 -----------------------------------------------------------------------------------------------------------------------------
-create 10000 items     65535    15.994s        244.054us ± 9.911us   (216.952us ... 758.137us)    248.183us  271.691us  282.87us  
-unsafeCreate 10000 ite 65535    13.124s        200.27us ± 11.563us   (176.582us ... 790.382us)    203.808us  230.245us  261.234us 
+create 10000 items     65535    11.329s        172.878us ± 18.985us  (158.413us ... 1.374ms)      173.326us  228.991us  258.243us
+unsafeCreate 10000 ite 65535    9.947s         151.785us ± 16.582us  (137.205us ... 1.476ms)      151.818us  205.928us  233.64us
 
 |-----------------------|
 | RingBuffer Benchmarks |
 |-----------------------|
-benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
+benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995
 -----------------------------------------------------------------------------------------------------------------------------
-prepend 10000 items    65535    2.576s         39.32us ± 2.408us     (38.388us ... 200.972us)     38.481us   46.605us   49.154us  
-enqueue 10000 items    65535    2.419s         36.919us ± 1.979us    (36.246us ... 191.532us)     36.312us   44.499us   46.592us  
-enqueueMany 10000 item 65535    2.444s         37.296us ± 3.108us    (36.291us ... 231.762us)     36.41us    48.263us   52.571us  
-dequeue 10000 items    65535    1.204s         18.386us ± 1.295us    (18.122us ... 171.803us)     18.161us   20.959us   23.628us  
-dequeueMany 10000 item 65535    2.416s         36.866us ± 2.944us    (36.249us ... 200.915us)     36.281us   51.079us   51.097us  
-concatenate 10000 item 65535    2.448s         37.364us ± 1.794us    (36.294us ... 213.781us)     37.324us   40.46us    41.21us   
-copy 10000 items       65535    2.444s         37.304us ± 1.93us     (36.562us ... 209.44us)      37.311us   40.141us   40.933us  
+prepend 10000 items    65535    2.146s         32.748us ± 5.231us    (31.599us ... 407.464us)     32.095us   44.594us   54.384us
+enqueue 10000 items    65535    2.047s         31.242us ± 5.394us    (29.92us ... 820.811us)      30.56us    42.871us   50.588us
+enqueueMany 10000 item 65535    2.055s         31.364us ± 4.284us    (30.578us ... 370.062us)     30.722us   42.463us   49.839us
+dequeue 10000 items    65535    2.069s         31.582us ± 7.694us    (30.9us ... 1.601ms)         30.912us   42.733us   51.607us
+dequeueMany 10000 item 65535    2.057s         31.4us ± 4.244us      (30.725us ... 367.619us)     30.798us   42.545us   48.881us
+concatenate 10000 item 65535    2.075s         31.669us ± 4.067us    (30.939us ... 405.414us)     31.095us   42.893us   49.349us
+copy 10000 items       65535    2.09s          31.903us ± 5.105us    (28.81us ... 896.158us)      31.516us   43.734us   51.07us
 
 |-------------------|
 | Signal Benchmarks |
 |-------------------|
-benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
+benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995
 -----------------------------------------------------------------------------------------------------------------------------
-send/receive 10000 ite 65535    11.795s        179.992us ± 4.466us   (179.094us ... 357.854us)    179.147us  191.347us  193.858us 
+send/receive 10000 ite 65535    10.216s        155.899us ± 61.072us  (144.899us ... 15.452ms)     153.778us  192.314us  208.724us
 
 -------------------------------|
 | UnbufferedChannel Benchmarks |
 |------------------------------|
-benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
+benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995
 -----------------------------------------------------------------------------------------------------------------------------
-send/receive 10000 ite 65535    21.773s        332.241us ± 7.918us   (325.232us ... 589.507us)    331.867us  359.591us  369.972us 
-```
+send/receive 10000 ite 65535    19.901s        303.67us ± 36.459us   (295.96us ... 7.336ms)       307.101us  357.287us  378.776us ```
 
 ## Contributing
 
@@ -249,3 +248,4 @@ See [example](./examples/ring_buffer.zig) and [source](./src/ring_buffer.zig) fo
 A `MemoryPool` is a structure that uses pre-allocated blocks of memory to quickly allocoate and deallocate resources quickly. It is very useful in situations where you have statically allocated memory but you will have fluctuating usage of that memory. A good example would be handling messages flowing throughout a system.
 
 See [example](./examples/memory_pool.zig) and [source](./src/memory_pool.zig) for more information on usage.
+````
