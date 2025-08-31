@@ -31,7 +31,7 @@ pub fn MemoryPool(comptime T: type) type {
         ///
         /// The `backing_buffer` is used to hold blocks that can be reused when memory is freed
         /// or when the pool needs to allocate new blocks.
-        backing_buffer: std.array_list.Managed(T),
+        backing_buffer: std.ArrayList(T),
 
         /// The total capacity of the memory pool.
         ///
@@ -51,8 +51,8 @@ pub fn MemoryPool(comptime T: type) type {
             var free_queue = try RingBuffer(*T).init(allocator, capacity);
             errdefer free_queue.deinit();
 
-            var backing_buffer = try std.array_list.Managed(T).initCapacity(allocator, capacity);
-            errdefer backing_buffer.deinit();
+            var backing_buffer = try std.ArrayList(T).initCapacity(allocator, capacity);
+            errdefer backing_buffer.deinit(allocator);
 
             for (0..capacity) |_| {
                 // provide a zero value for the generic type so that it can
@@ -84,7 +84,7 @@ pub fn MemoryPool(comptime T: type) type {
         pub fn deinit(self: *Self) void {
             self.free_list.deinit();
             self.assigned_map.deinit();
-            self.backing_buffer.deinit();
+            self.backing_buffer.deinit(self.allocator);
         }
 
         /// return the number assigned ptrs in the memory pool.
@@ -135,7 +135,7 @@ pub fn MemoryPool(comptime T: type) type {
         pub fn unsafeCreateN(self: *Self, allocator: std.mem.Allocator, n: usize) ![]*T {
             if (self.available() < n) return Error.OutOfMemory;
 
-            var list = try std.array_list.Managed(*T).initCapacity(allocator, n);
+            var list = try std.ArrayList(*T).initCapacity(allocator, n);
             errdefer list.deinit();
 
             for (0..n) |_| {
@@ -191,15 +191,15 @@ test "create and destroy" {
     defer memory_pool_create.deinit();
 
     // create an ArrayList that will hold some pointers to be destroyed later
-    var ptrs = std.array_list.Managed(*TestStruct).init(allocator);
-    defer ptrs.deinit();
+    var ptrs: std.ArrayList(*TestStruct) = .empty;
+    defer ptrs.deinit(allocator);
 
     // fill the entire memory pool
     for (0..memory_pool_create.available()) |i| {
         const p = try memory_pool_create.create();
         p.* = .{ .data = @intCast(i) };
 
-        try ptrs.append(p);
+        try ptrs.append(allocator, p);
     }
 
     try testing.expectEqual(0, memory_pool_create.available());
@@ -256,13 +256,13 @@ test "data types" {
         defer memory_pool.deinit();
 
         // create an ArrayList that will hold some pointers to be destroyed later
-        var ptrs = std.array_list.Managed(*types[i]).init(allocator);
-        defer ptrs.deinit();
+        var ptrs: std.ArrayList(*types[i]) = .empty;
+        defer ptrs.deinit(allocator);
 
         for (0..memory_pool.available()) |_| {
             const ptr = try memory_pool.create();
 
-            try ptrs.append(ptr);
+            try ptrs.append(allocator, ptr);
         }
 
         try testing.expectEqual(ptrs.items.len, memory_pool.capacity);
