@@ -136,16 +136,16 @@ pub fn MemoryPool(comptime T: type) type {
             if (self.available() < n) return Error.OutOfMemory;
 
             var list = try std.ArrayList(*T).initCapacity(allocator, n);
-            errdefer list.deinit();
+            errdefer list.deinit(allocator);
 
             for (0..n) |_| {
                 if (self.free_list.dequeue()) |ptr| {
-                    try list.append(ptr);
+                    try list.append(allocator, ptr);
                     try self.assigned_map.put(ptr, true);
                 } else break;
             }
 
-            return list.toOwnedSlice();
+            return list.toOwnedSlice(allocator);
         }
 
         /// Frees a memory block and returns it to the pool. Thread safe
@@ -217,6 +217,30 @@ test "create and destroy" {
     }
 
     try testing.expectEqual(memory_pool_create.capacity, memory_pool_create.available());
+}
+
+test "create n ptrs" {
+    const TestStruct = struct {
+        data: usize = 0,
+    };
+
+    const allocator = testing.allocator;
+
+    var memory_pool = try MemoryPool(TestStruct).init(allocator, 100);
+    defer memory_pool.deinit();
+
+    // create an ArrayList that will hold some pointers to be destroyed later
+    var ptrs: std.ArrayList(*TestStruct) = .empty;
+    defer ptrs.deinit(allocator);
+
+    const p = try memory_pool.createN(allocator, 10);
+    defer allocator.free(p);
+
+    try testing.expectEqual(memory_pool.available(), memory_pool.capacity - p.len);
+
+    for (p) |ptr| {
+        memory_pool.destroy(ptr);
+    }
 }
 
 test "data types" {
