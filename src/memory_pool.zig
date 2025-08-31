@@ -219,6 +219,30 @@ test "create and destroy" {
     try testing.expectEqual(memory_pool_create.capacity, memory_pool_create.available());
 }
 
+test "create n ptrs" {
+    const TestStruct = struct {
+        data: usize = 0,
+    };
+
+    const allocator = testing.allocator;
+
+    var memory_pool = try MemoryPool(TestStruct).init(allocator, 100);
+    defer memory_pool.deinit();
+
+    // create an ArrayList that will hold some pointers to be destroyed later
+    var ptrs: std.ArrayList(*TestStruct) = .empty;
+    defer ptrs.deinit(allocator);
+
+    const p = try memory_pool.createN(allocator, 10);
+    defer allocator.free(p);
+
+    try testing.expectEqual(memory_pool.available(), memory_pool.capacity - p.len);
+
+    for (p) |ptr| {
+        memory_pool.destroy(ptr);
+    }
+}
+
 test "data types" {
     const Person = struct {
         name: []const u8,
