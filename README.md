@@ -99,7 +99,7 @@ zig build bench -Doptimize=ReleaseFast
 
 Example output
 
-````plaintext
+```plaintext
 --------------------------------------------------------
   Operating System: linux x86_64
   CPU:              13th Gen Intel(R) Core(TM) i9-13900K
@@ -249,4 +249,7 @@ See [example](./examples/ring_buffer.zig) and [source](./src/ring_buffer.zig) fo
 A `MemoryPool` is a structure that uses pre-allocated blocks of memory to quickly allocoate and deallocate resources quickly. It is very useful in situations where you have statically allocated memory but you will have fluctuating usage of that memory. A good example would be handling messages flowing throughout a system.
 
 See [example](./examples/memory_pool.zig) and [source](./src/memory_pool.zig) for more information on usage.
-````
+
+```
+
+```
