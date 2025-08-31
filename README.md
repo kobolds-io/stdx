@@ -59,7 +59,7 @@ You can install `stdx` just like any other `zig` dependency by editing your `bui
 ```zig
     .dependencies = .{
         .stdx = .{
-            .url = "https://github.com/kobolds-io/stdx/archive/refs/tags/v0.0.11.tar.gz",
+            .url = "https://github.com/kobolds-io/stdx/archive/refs/tags/v0.0.12.tar.gz",
             .hash = "",
         },
     },
