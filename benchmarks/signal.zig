@@ -14,7 +14,7 @@ fn BenchmarkSignalSendReceive(_: std.mem.Allocator) void {
     const want: usize = 100;
     var signal = Signal(usize).new();
 
-    for (0..constants.benchmark_max_queue_data_list) |i| {
+    for (0..constants.benchmark_max_queue_data_list) |_| {
         // this is a hard reset of the signal and shouldn't be performed by
         // end users as signals should only be used once.
         defer {
@@ -24,7 +24,7 @@ fn BenchmarkSignalSendReceive(_: std.mem.Allocator) void {
         signal.send(want);
         const got = signal.receive();
 
-        assert(i == got);
+        assert(want == got);
     }
 }
 
