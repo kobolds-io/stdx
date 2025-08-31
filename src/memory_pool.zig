@@ -136,16 +136,16 @@ pub fn MemoryPool(comptime T: type) type {
             if (self.available() < n) return Error.OutOfMemory;
 
             var list = try std.ArrayList(*T).initCapacity(allocator, n);
-            errdefer list.deinit();
+            errdefer list.deinit(allocator);
 
             for (0..n) |_| {
                 if (self.free_list.dequeue()) |ptr| {
-                    try list.append(ptr);
+                    try list.append(allocator, ptr);
                     try self.assigned_map.put(ptr, true);
                 } else break;
             }
 
-            return list.toOwnedSlice();
+            return list.toOwnedSlice(allocator);
         }
 
         /// Frees a memory block and returns it to the pool. Thread safe
