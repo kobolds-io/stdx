@@ -263,7 +263,3 @@ See [example](./examples/ring_buffer.zig) and [source](./src/ring_buffer.zig) fo
 A `MemoryPool` is a structure that uses pre-allocated blocks of memory to quickly allocoate and deallocate resources quickly. It is very useful in situations where you have statically allocated memory but you will have fluctuating usage of that memory. A good example would be handling messages flowing throughout a system.
 
 See [example](./examples/memory_pool.zig) and [source](./src/memory_pool.zig) for more information on usage.
-
-```
-
-```
