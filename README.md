@@ -67,6 +67,20 @@ You can install `stdx` just like any other `zig` dependency by editing your `bui
 
 run `zig build --fetch` to fetch the dependencies. This will return an error as the has will not match. Copy the new hash and try again.Sometimes `zig` is helpful and it caches stuff for you in the `zig-cache` dir. Try deleting that directory if you see some issues.
 
+In your `build.zig` file add the library as a dependency.
+
+```zig
+// ...boilerplate
+
+const stdx_dep = b.dependency("stdx", .{
+    .target = target,
+    .optimize = optimize,
+});
+const stdx_mod = stdx_dep.module("stdx");
+
+exe.root_module.addImport("stdx", stdx_mod);
+```
+
 ## Organization
 
 This library follows the organization of the `zig` `std` library. You will see familiar hierarchies like `stdx.mem` for memory stuff and `std.<DATA_STRUCTURE>` for other data structures. As I build this library out, I'll add more notes and documentation.
