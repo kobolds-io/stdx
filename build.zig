@@ -38,6 +38,13 @@ fn setupLibrary(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.b
         .version = version,
     });
 
+    // Explicitly export the `stdx` module so it can be imported by others
+    _ = b.addModule("stdx", .{
+        .root_source_file = b.path("src/stdx.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     b.installArtifact(lib);
 }
 
