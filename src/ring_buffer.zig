@@ -1,5 +1,6 @@
 const std = @import("std");
 const testing = std.testing;
+const assert = std.debug.assert;
 
 pub const RingBufferError = error{
     BufferFull,
@@ -11,6 +12,20 @@ pub const RingBufferError = error{
 pub fn RingBuffer(comptime T: type) type {
     return struct {
         const Self = @This();
+
+        const Iterator = struct {
+            rb: *Self,
+            index: usize = 0,
+
+            /// Returns the next item in the ring buffer, or null when iteration is complete.
+            pub fn next(it: *Iterator) ?*T {
+                if (it.index >= it.rb.count) return null;
+
+                const real_index = (it.rb.head + it.index) % it.rb.capacity;
+                it.index += 1;
+                return &it.rb.buffer[real_index];
+            }
+        };
 
         /// allocator used to `alloc` the `buffer`. This allocator should have a
         /// lifetime longer than the ring buffer.
@@ -305,6 +320,21 @@ pub fn RingBuffer(comptime T: type) type {
                 self.enqueue(value) catch unreachable;
             }
         }
+
+        /// Return an iterator for the ring buffer. Handles the wrap around
+        /// nature of the ring buffer.
+        pub fn iterator(self: *Self) Iterator {
+            return Iterator{ .rb = self };
+        }
+
+        /// View an item at a specific index in the ring buffer. Handles the
+        /// wrap around nature of the ring buffer.
+        pub fn peek(self: *Self, index: usize) ?T {
+            if (index > self.count) return null;
+
+            const real_index = (self.head + index) % self.capacity;
+            return self.buffer[real_index];
+        }
     };
 }
 
@@ -564,4 +594,48 @@ test "copy fails when not enough space in destination" {
 
     // Destination should still be empty
     try testing.expectEqual(true, dest.isEmpty());
+}
+
+test "iterator functionality" {
+    const allocator = testing.allocator;
+
+    var ring_buffer = try RingBuffer(u8).init(allocator, 5);
+    defer ring_buffer.deinit();
+
+    try ring_buffer.enqueue(1);
+    try ring_buffer.enqueue(2);
+    try ring_buffer.enqueue(3);
+    try ring_buffer.enqueue(4);
+    try ring_buffer.enqueue(5);
+
+    _ = ring_buffer.dequeue();
+    try ring_buffer.enqueue(1);
+
+    const expected = [_]u8{ 2, 3, 4, 5, 1 };
+
+    var iter = ring_buffer.iterator();
+    var index: usize = 0;
+
+    while (iter.next()) |v| {
+        try testing.expect(index < expected.len);
+        try testing.expectEqual(expected[index], v.*);
+        index += 1;
+    }
+
+    try testing.expectEqual(expected.len, index);
+}
+
+test "peeking" {
+    const allocator = testing.allocator;
+
+    var ring_buffer = try RingBuffer(u8).init(allocator, 3);
+    defer ring_buffer.deinit();
+
+    try ring_buffer.enqueue(1);
+    try ring_buffer.enqueue(2);
+    try ring_buffer.enqueue(3);
+
+    try testing.expectEqual(1, ring_buffer.peek(0).?);
+    try testing.expectEqual(2, ring_buffer.peek(1).?);
+    try testing.expectEqual(3, ring_buffer.peek(ring_buffer.count - 1).?);
 }
