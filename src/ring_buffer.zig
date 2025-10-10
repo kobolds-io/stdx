@@ -325,24 +325,11 @@ pub fn RingBuffer(comptime T: type) type {
             return Iterator{ .rb = self };
         }
 
-        pub fn items(self: *const Self, allocator: std.mem.Allocator) ![]T {
-            if (self.count == 0) return allocator.alloc(T, 0);
+        pub fn peek(self: *Self, index: usize) ?T {
+            if (index > self.count) return null;
 
-            const out = try self.allocator.alloc(T, self.count);
-
-            if (self.head < self.tail) {
-                // contiguous region
-                std.mem.copy(T, out, self.buffer[self.head..self.tail]);
-            } else {
-                // wrapped region: copy head→end, then start→tail
-                const first_part = self.buffer[self.head..self.capacity];
-                const second_part = self.buffer[0..self.tail];
-
-                std.mem.copy(T, out[0..first_part.len], first_part);
-                std.mem.copy(T, out[first_part.len..], second_part);
-            }
-
-            return out;
+            const real_index = (self.head + index) % self.capacity;
+            return self.buffer[real_index];
         }
     };
 }
@@ -632,4 +619,19 @@ test "iterator functionality" {
     }
 
     try testing.expectEqual(expected.len, index);
+}
+
+test "peeking" {
+    const allocator = testing.allocator;
+
+    var ring_buffer = try RingBuffer(u8).init(allocator, 3);
+    defer ring_buffer.deinit();
+
+    try ring_buffer.enqueue(1);
+    try ring_buffer.enqueue(2);
+    try ring_buffer.enqueue(3);
+
+    try testing.expectEqual(1, ring_buffer.peek(0).?);
+    try testing.expectEqual(2, ring_buffer.peek(1).?);
+    try testing.expectEqual(3, ring_buffer.peek(ring_buffer.count - 1).?);
 }
