@@ -321,10 +321,14 @@ pub fn RingBuffer(comptime T: type) type {
             }
         }
 
+        /// Return an iterator for the ring buffer. Handles the wrap around
+        /// nature of the ring buffer.
         pub fn iterator(self: *Self) Iterator {
             return Iterator{ .rb = self };
         }
 
+        /// View an item at a specific index in the ring buffer. Handles the
+        /// wrap around nature of the ring buffer.
         pub fn peek(self: *Self, index: usize) ?T {
             if (index > self.count) return null;
 
