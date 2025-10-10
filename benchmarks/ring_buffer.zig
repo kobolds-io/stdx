@@ -137,7 +137,7 @@ const BenchmarkRingBufferConcatenate = struct {
 
     pub fn run(self: Self, _: std.mem.Allocator) void {
         const other_count = self.ring_buffer_other.count;
-        self.ring_buffer.concatenate(self.ring_buffer_other) catch @panic("could not execute benchmark");
+        _ = self.ring_buffer.concatenate(self.ring_buffer_other) catch @panic("could not execute benchmark");
         assert(ring_buffer_concatenate.count == other_count);
     }
 };
@@ -158,7 +158,7 @@ const BenchmarkRingBufferCopy = struct {
     }
 
     pub fn run(self: Self, _: std.mem.Allocator) void {
-        self.ring_buffer.copy(self.ring_buffer_other) catch @panic("could not execute benchmark");
+        _ = self.ring_buffer.copy(self.ring_buffer_other) catch @panic("could not execute benchmark");
     }
 };
 

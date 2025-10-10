@@ -128,14 +128,14 @@ pub fn RingBuffer(comptime T: type) type {
         /// This method appends all elements from the `other` ring buffer into `self`,
         /// preserving the order of items as they appeared in `other`.
         /// The operation is destructive to `other`
-        pub fn concatenate(self: *Self, other: *Self) !void {
+        pub fn concatenate(self: *Self, other: *Self) !usize {
             if (self.available() < other.count) return RingBufferError.BufferFull;
 
             const capacity = self.capacity;
 
-            var i: usize = 0;
-            while (i < other.count) : (i += 1) {
-                const index = (other.head + i) % capacity;
+            var count: usize = 0;
+            while (count < other.count) : (count += 1) {
+                const index = (other.head + count) % capacity;
                 const value = other.buffer[index];
                 self.buffer[self.tail] = value;
                 self.tail = (self.tail + 1) % capacity;
@@ -143,6 +143,8 @@ pub fn RingBuffer(comptime T: type) type {
 
             self.count += other.count;
             other.reset();
+
+            return count;
         }
 
         /// Concatenate as many items as possible from another ring buffer into this one.
@@ -151,12 +153,12 @@ pub fn RingBuffer(comptime T: type) type {
         /// into `self`, preserving the order of items as they appeared in `other`.
         /// Only the number of items that can fit in `self` will be copied.
         /// The operation is destructive to `other`—copied items are removed from it.
-        pub fn concatenateAvailable(self: *Self, other: *Self) void {
+        pub fn concatenateAvailable(self: *Self, other: *Self) usize {
             const num_to_copy = @min(self.available(), other.count);
 
-            var i: usize = 0;
-            while (i < num_to_copy) : (i += 1) {
-                const index = (other.head + i) % other.capacity;
+            var count: usize = 0;
+            while (count < num_to_copy) : (count += 1) {
+                const index = (other.head + count) % other.capacity;
                 const value = other.buffer[index];
                 self.buffer[self.tail] = value;
                 self.tail = (self.tail + 1) % self.capacity;
@@ -165,6 +167,8 @@ pub fn RingBuffer(comptime T: type) type {
             self.count += num_to_copy;
             other.head = (other.head + num_to_copy) % other.capacity;
             other.count -= num_to_copy;
+
+            return count;
         }
 
         /// Copy the contents of another ring buffer into this one while preserving
@@ -174,17 +178,19 @@ pub fn RingBuffer(comptime T: type) type {
         /// preserving both the order of the items as they appeared in `other` as well
         /// and the contents of `other`.
         /// This operation is not destructive to `other`
-        pub fn copy(self: *Self, other: *Self) !void {
+        pub fn copy(self: *Self, other: *Self) !usize {
             if (self.available() < other.count) return RingBufferError.BufferFull;
 
-            var i: usize = 0;
-            while (i < other.count) : (i += 1) {
-                const index = (other.head + i) % other.capacity;
+            var count: usize = 0;
+            while (count < other.count) : (count += 1) {
+                const index = (other.head + count) % other.capacity;
                 self.buffer[self.tail] = other.buffer[index];
                 self.tail = (self.tail + 1) % self.capacity;
             }
 
             self.count += other.count;
+
+            return count;
         }
 
         /// Copies the minimum number of available items from `self` to all `others`.
@@ -485,7 +491,9 @@ test "concatenate" {
     _ = a.enqueueMany(&.{ 1, 2, 3 });
     _ = b.enqueueMany(&.{ 4, 5 });
 
-    try a.concatenate(&b);
+    const expected_items_concatenated = b.count;
+    const items_concatenated = try a.concatenate(&b);
+    try testing.expectEqual(expected_items_concatenated, items_concatenated);
 
     try testing.expectEqual(@as(usize, 5), a.count);
     try testing.expectEqual(@as(usize, 0), b.count);
@@ -512,7 +520,10 @@ test "copy preserves other and copies all values in order" {
     try testing.expectEqual(true, dest.isEmpty());
 
     // Perform the copy
-    try dest.copy(&src);
+    const n = try dest.copy(&src);
+
+    // ensure that the dest.count increased by n
+    try testing.expectEqual(n, dest.count);
 
     // Ensure source is unchanged after copy
     try testing.expectEqual(@as(usize, values.len), src.count);

@@ -133,7 +133,7 @@ pub fn Producer(comptime T: type) type {
                 self.produced_count += @intCast(n);
             }
 
-            self.topic.queue.concatenateAvailable(self.queue);
+            _ = self.topic.queue.concatenateAvailable(self.queue);
         }
 
         pub fn run(self: *Self, ready: *UnbufferedChannel(bool)) void {
@@ -195,7 +195,7 @@ pub fn Worker(comptime T: type) type {
             self.topic.mutex.lock();
             defer self.topic.mutex.unlock();
 
-            self.queue.concatenateAvailable(self.topic.queue);
+            _ = self.queue.concatenateAvailable(self.topic.queue);
             while (self.queue.dequeue()) |_| {
                 self.processed_count += 1;
             }
