@@ -30,6 +30,15 @@ pub fn main() !void {
 
     assert(ring_buffer.available() == 0);
 
+    // iterate over all of the items in the ring buffer
+    var iter = ring_buffer.iterator();
+    while (iter.next()) |entry| {
+        const v = entry.*;
+
+        // do nothing with this
+        _ = v;
+    }
+
     // dequeue a single item from the ring buffer
     const v = ring_buffer.dequeue();
     assert(first_value == v);
