@@ -11,10 +11,10 @@ const BufferedChannel = stdx.BufferedChannel;
 const BenchmarkBufferedChannelSend = struct {
     const Self = @This();
 
-    list: *std.array_list.Managed(usize),
+    list: *std.ArrayList(usize),
     channel: *BufferedChannel(usize),
 
-    fn new(list: *std.array_list.Managed(usize), channel: *BufferedChannel(usize)) Self {
+    fn new(list: *std.ArrayList(usize), channel: *BufferedChannel(usize)) Self {
         return .{
             .list = list,
             .channel = channel,
@@ -31,10 +31,10 @@ const BenchmarkBufferedChannelSend = struct {
 const BenchmarkBufferedChannelReceive = struct {
     const Self = @This();
 
-    list: *std.array_list.Managed(usize),
+    list: *std.ArrayList(usize),
     channel: *BufferedChannel(usize),
 
-    fn new(list: *std.array_list.Managed(usize), channel: *BufferedChannel(usize)) Self {
+    fn new(list: *std.ArrayList(usize), channel: *BufferedChannel(usize)) Self {
         return .{
             .list = list,
             .channel = channel,
@@ -51,7 +51,7 @@ const BenchmarkBufferedChannelReceive = struct {
 var send_channel: BufferedChannel(usize) = undefined;
 var receive_channel: BufferedChannel(usize) = undefined;
 
-var data_list: std.array_list.Managed(usize) = undefined;
+var data_list: std.ArrayList(usize) = .empty;
 const allocator = testing.allocator;
 
 fn beforeEachSend() void {
@@ -63,7 +63,7 @@ fn beforeEachReceive() void {
     assert(receive_channel.buffer.available() == 0);
 }
 
-test "Channel benchmarks" {
+test "BufferedChannel benchmarks" {
     var bench = zbench.Benchmark.init(
         std.testing.allocator,
         // .{ .iterations = 1 },
@@ -72,11 +72,11 @@ test "Channel benchmarks" {
     defer bench.deinit();
 
     // Create a list of `n` length that will be used/reused by each benchmarking test
-    data_list = try std.array_list.Managed(usize).initCapacity(
+    data_list = try std.ArrayList(usize).initCapacity(
         allocator,
         constants.benchmark_max_queue_data_list,
     );
-    defer data_list.deinit();
+    defer data_list.deinit(allocator);
 
     // fill the data list with items
     for (0..data_list.capacity) |i| {
