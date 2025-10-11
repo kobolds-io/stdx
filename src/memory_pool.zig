@@ -89,11 +89,24 @@ pub fn MemoryPool(comptime T: type) type {
 
         /// return the number assigned ptrs in the memory pool.
         pub fn count(self: *Self) usize {
+            return self.countUnsafe();
+        }
+
+        /// return the number assigned ptrs in the memory pool.
+        pub fn countUnsafe(self: *Self) usize {
             return self.assigned_map.count();
         }
 
-        // return the number of free ptrs remaining in the memory pool.
+        /// return the number of free ptrs remaining in the memory pool.
         pub fn available(self: *Self) usize {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+
+            return self.availableUnsafe();
+        }
+
+        /// Non thread safe version of `available`
+        pub fn availableUnsafe(self: *Self) usize {
             return self.free_list.count;
         }
 
@@ -110,7 +123,7 @@ pub fn MemoryPool(comptime T: type) type {
 
         /// Non thread safe version of `create`
         pub fn unsafeCreate(self: *Self) !*T {
-            if (self.available() == 0) return Error.OutOfMemory;
+            if (self.availableUnsafe() == 0) return Error.OutOfMemory;
 
             if (self.free_list.dequeue()) |ptr| {
                 try self.assigned_map.put(ptr, true);
@@ -133,7 +146,7 @@ pub fn MemoryPool(comptime T: type) type {
 
         /// Unsafe version of `createN`.
         pub fn unsafeCreateN(self: *Self, allocator: std.mem.Allocator, n: usize) ![]*T {
-            if (self.available() < n) return Error.OutOfMemory;
+            if (self.availableUnsafe() < n) return Error.OutOfMemory;
 
             var list = try std.ArrayList(*T).initCapacity(allocator, n);
             errdefer list.deinit(allocator);
