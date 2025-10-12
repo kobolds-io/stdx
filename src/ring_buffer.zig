@@ -359,7 +359,7 @@ pub fn RingBuffer(comptime T: type) type {
             }
         }
 
-        pub fn sort(self: *Self, comparator: *const fn (ctx: void, left: T, right: T) bool) void {
+        pub fn sort(self: *Self, comptime comparator: fn (_: void, left: T, right: T) bool) void {
             if (self.count <= 1) return;
 
             self.linearize();
@@ -672,30 +672,62 @@ test "peeking" {
 }
 
 test "sorting" {
-    const allocator = testing.allocator;
-
-    var ring_buffer = try RingBuffer(u8).init(allocator, 3);
-    defer ring_buffer.deinit();
-
-    try ring_buffer.enqueue(3);
-    try ring_buffer.enqueue(2);
-    try ring_buffer.enqueue(1);
-
-    try testing.expectEqual(3, ring_buffer.count);
-    try testing.expectEqual(3, ring_buffer.peek(0).?);
-    try testing.expectEqual(2, ring_buffer.peek(1).?);
-    try testing.expectEqual(1, ring_buffer.peek(2).?);
-
-    const comparator = struct {
-        fn comparator(_: void, left: u8, right: u8) bool {
+    const run_test = struct {
+        fn testIntComparator(_: void, left: u8, right: u8) bool {
             return left < right;
         }
-    }.comparator;
 
-    ring_buffer.sort(comparator);
+        const TestStruct = struct {
+            data: u32 = 0,
+        };
 
-    try testing.expectEqual(3, ring_buffer.count);
-    try testing.expectEqual(1, ring_buffer.peek(0).?);
-    try testing.expectEqual(2, ring_buffer.peek(1).?);
-    try testing.expectEqual(3, ring_buffer.peek(2).?);
+        fn testStructComparator(_: void, left: TestStruct, right: TestStruct) bool {
+            return left.data < right.data;
+        }
+
+        pub fn runner() !void {
+            const allocator = testing.allocator;
+
+            var ring_buffer_1 = try RingBuffer(u8).init(allocator, 3);
+            defer ring_buffer_1.deinit();
+
+            try ring_buffer_1.enqueue(3);
+            try ring_buffer_1.enqueue(2);
+            try ring_buffer_1.enqueue(1);
+
+            try testing.expectEqual(3, ring_buffer_1.count);
+            try testing.expectEqual(3, ring_buffer_1.peek(0).?);
+            try testing.expectEqual(2, ring_buffer_1.peek(1).?);
+            try testing.expectEqual(1, ring_buffer_1.peek(2).?);
+
+            ring_buffer_1.sort(testIntComparator);
+
+            try testing.expectEqual(3, ring_buffer_1.count);
+            try testing.expectEqual(1, ring_buffer_1.peek(0).?);
+            try testing.expectEqual(2, ring_buffer_1.peek(1).?);
+            try testing.expectEqual(3, ring_buffer_1.peek(2).?);
+
+            // try sorting a more complex data type
+            var ring_buffer_2 = try RingBuffer(TestStruct).init(allocator, 3);
+            defer ring_buffer_2.deinit();
+
+            try ring_buffer_2.enqueue(.{ .data = 10 });
+            try ring_buffer_2.enqueue(.{ .data = 29 });
+            try ring_buffer_2.enqueue(.{ .data = 2 });
+
+            try testing.expectEqual(3, ring_buffer_2.count);
+            try testing.expectEqual(10, ring_buffer_2.peek(0).?.data);
+            try testing.expectEqual(29, ring_buffer_2.peek(1).?.data);
+            try testing.expectEqual(2, ring_buffer_2.peek(2).?.data);
+
+            ring_buffer_2.sort(testStructComparator);
+
+            try testing.expectEqual(3, ring_buffer_2.count);
+            try testing.expectEqual(2, ring_buffer_2.peek(0).?.data);
+            try testing.expectEqual(10, ring_buffer_2.peek(1).?.data);
+            try testing.expectEqual(29, ring_buffer_2.peek(2).?.data);
+        }
+    }.runner;
+
+    try run_test();
 }
