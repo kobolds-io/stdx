@@ -335,6 +335,37 @@ pub fn RingBuffer(comptime T: type) type {
             const real_index = (self.head + index) % self.capacity;
             return self.buffer[real_index];
         }
+
+        /// Reorder the items in the ring buffer where the head is now at index 0 and the tail is moved to the last
+        /// index in the current list
+        pub fn linearize(self: *Self) void {
+            if (self.count <= 1) return;
+
+            // Step 1: If wrapped, rotate the buffer to linearize
+            if (self.head > 0) {
+                var tmp: T = undefined;
+                var i: usize = 0;
+                while (i < self.count) : (i += 1) {
+                    const src_index = (self.head + i) % self.capacity;
+                    const dst_index = i;
+                    if (src_index != dst_index) {
+                        // simple rotation — swap element-by-element
+                        tmp = self.buffer[src_index];
+                        self.buffer[dst_index] = tmp;
+                    }
+                }
+                self.head = 0;
+                self.tail = self.count;
+            }
+        }
+
+        pub fn sort(self: *Self, comparator: *const fn (ctx: void, left: T, right: T) bool) void {
+            if (self.count <= 1) return;
+
+            self.linearize();
+
+            std.sort.block(T, self.buffer[0..self.count], {}, comparator);
+        }
     };
 }
 
@@ -638,4 +669,33 @@ test "peeking" {
     try testing.expectEqual(1, ring_buffer.peek(0).?);
     try testing.expectEqual(2, ring_buffer.peek(1).?);
     try testing.expectEqual(3, ring_buffer.peek(ring_buffer.count - 1).?);
+}
+
+test "sorting" {
+    const allocator = testing.allocator;
+
+    var ring_buffer = try RingBuffer(u8).init(allocator, 3);
+    defer ring_buffer.deinit();
+
+    try ring_buffer.enqueue(3);
+    try ring_buffer.enqueue(2);
+    try ring_buffer.enqueue(1);
+
+    try testing.expectEqual(3, ring_buffer.count);
+    try testing.expectEqual(3, ring_buffer.peek(0).?);
+    try testing.expectEqual(2, ring_buffer.peek(1).?);
+    try testing.expectEqual(1, ring_buffer.peek(2).?);
+
+    const comparator = struct {
+        fn comparator(_: void, left: u8, right: u8) bool {
+            return left < right;
+        }
+    }.comparator;
+
+    ring_buffer.sort(comparator);
+
+    try testing.expectEqual(3, ring_buffer.count);
+    try testing.expectEqual(1, ring_buffer.peek(0).?);
+    try testing.expectEqual(2, ring_buffer.peek(1).?);
+    try testing.expectEqual(3, ring_buffer.peek(2).?);
 }
