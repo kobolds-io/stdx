@@ -54,12 +54,18 @@ fn main() !void {
 
 ## Installation
 
-You can install `stdx` just like any other `zig` dependency by editing your `build.zig.zon` file.
+Install using zig fetch
+
+```bash
+zig fetch --save  https://github.com/kobolds-io/stdx/archive/refs/tags/v0.1.0.tar.gz
+```
+
+Alternatively, you can install `stdx` just like any other `zig` dependency by editing your `build.zig.zon` file.
 
 ```zig
     .dependencies = .{
         .stdx = .{
-            .url = "https://github.com/kobolds-io/stdx/archive/refs/tags/v0.0.12.tar.gz",
+            .url = "https://github.com/kobolds-io/stdx/archive/refs/tags/v0.1.0.tar.gz",
             .hash = "",
         },
     },
@@ -67,7 +73,7 @@ You can install `stdx` just like any other `zig` dependency by editing your `bui
 
 run `zig build --fetch` to fetch the dependencies. This will return an error as the has will not match. Copy the new hash and try again.Sometimes `zig` is helpful and it caches stuff for you in the `zig-cache` dir. Try deleting that directory if you see some issues.
 
-In your `build.zig` file add the library as a dependency.
+In the `build.zig` file add the library as a dependency.
 
 ```zig
 // ...boilerplate
