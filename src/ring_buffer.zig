@@ -336,8 +336,8 @@ pub fn RingBuffer(comptime T: type) type {
             return self.buffer[real_index];
         }
 
-        /// Reorder the items in the ring buffer where the head is now at index 0 and the tail is moved to the last
-        /// index in the current list
+        /// Reorder the items in the ring buffer in place where the head is now at index 0 and the tail is moved to
+        /// the last index (ring_buffer.count - 1) in the current list.
         pub fn linearize(self: *Self) void {
             if (self.count <= 1) return;
 
