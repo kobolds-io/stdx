@@ -341,7 +341,6 @@ pub fn RingBuffer(comptime T: type) type {
         pub fn linearize(self: *Self) void {
             if (self.count <= 1) return;
 
-            // Step 1: If wrapped, rotate the buffer to linearize
             if (self.head > 0) {
                 var tmp: T = undefined;
                 var i: usize = 0;
@@ -349,7 +348,6 @@ pub fn RingBuffer(comptime T: type) type {
                     const src_index = (self.head + i) % self.capacity;
                     const dst_index = i;
                     if (src_index != dst_index) {
-                        // simple rotation — swap element-by-element
                         tmp = self.buffer[src_index];
                         self.buffer[dst_index] = tmp;
                     }
@@ -359,6 +357,8 @@ pub fn RingBuffer(comptime T: type) type {
             }
         }
 
+        /// Sort the contents of the ring buffer. The items are first linearized, see RingBuffer.linearize(), and then
+        /// sorted using the block function. Takes a custom comparator to allow for custom item sorting.
         pub fn sort(self: *Self, comptime comparator: fn (_: void, left: T, right: T) bool) void {
             if (self.count <= 1) return;
 
