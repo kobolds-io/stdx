@@ -336,26 +336,59 @@ pub fn RingBuffer(comptime T: type) type {
             return self.buffer[real_index];
         }
 
-        /// Reorder the items in the ring buffer in place where the head is now at index 0 and the tail is moved to
-        /// the last index (ring_buffer.count - 1) in the current list.
-        pub fn linearize(self: *Self) void {
-            if (self.count <= 1) return;
-
-            if (self.head > 0) {
-                var tmp: T = undefined;
-                var i: usize = 0;
-                while (i < self.count) : (i += 1) {
-                    const src_index = (self.head + i) % self.capacity;
-                    const dst_index = i;
-                    if (src_index != dst_index) {
-                        tmp = self.buffer[src_index];
-                        self.buffer[dst_index] = tmp;
-                    }
-                }
-                self.head = 0;
-                self.tail = self.count;
+        // helper reverse function
+        fn reverse(buffer: []T, start: usize, end: usize) void {
+            var i = start;
+            var j = end - 1;
+            while (i < j) {
+                const tmp = buffer[i];
+                buffer[i] = buffer[j];
+                buffer[j] = tmp;
+                i += 1;
+                j -= 1;
             }
         }
+
+        pub fn linearize(self: *Self) void {
+            if (self.count <= 1 or self.head == 0) return;
+
+            const count = self.count;
+            const cap = self.capacity;
+            const head = self.head;
+
+            reverse(self.buffer, 0, head);
+
+            var logical_end = head + count;
+            if (logical_end > cap) logical_end = cap;
+
+            reverse(self.buffer, head, logical_end);
+
+            reverse(self.buffer, 0, count);
+
+            self.head = 0;
+            self.tail = count % cap;
+        }
+
+        /// Reorder the items in the ring buffer in place where the head is now at index 0 and the tail is moved to
+        /// the last index (ring_buffer.count - 1) in the current list.
+        // pub fn linearize(self: *Self) void {
+        //     if (self.count <= 1) return;
+
+        //     if (self.head > 0) {
+        //         var tmp: T = undefined;
+        //         var i: usize = 0;
+        //         while (i < self.count) : (i += 1) {
+        //             const src_index = (self.head + i) % self.capacity;
+        //             const dst_index = i;
+        //             if (src_index != dst_index) {
+        //                 tmp = self.buffer[src_index];
+        //                 self.buffer[dst_index] = tmp;
+        //             }
+        //         }
+        //         self.head = 0;
+        //         self.tail = self.count;
+        //     }
+        // }
 
         /// Sort the contents of the ring buffer. The items are first linearized, see RingBuffer.linearize(), and then
         /// sorted using the block function. Takes a custom comparator to allow for custom item sorting.
@@ -365,6 +398,59 @@ pub fn RingBuffer(comptime T: type) type {
             self.linearize();
 
             std.sort.block(T, self.buffer[0..self.count], {}, comparator);
+        }
+
+        // pub fn resize(self: *Self, allocator: std.mem.Allocator, new_capacity: usize) !void {
+        //     // Don't allow shrink that would truncate existing data
+        //     if (self.count > new_capacity)
+        //         return error.OutOfMemory;
+
+        //     // Make data contiguous and head equal 0
+        //     self.linearize();
+
+        //     // Allocate the new backing buffer
+        //     const new_buffer = try allocator.alloc(T, new_capacity);
+        //     errdefer allocator.free(new_buffer);
+
+        //     // Copy valid elements into the new buffer
+        //     @memcpy(new_buffer[0..self.count], self.buffer[0..self.count]);
+
+        //     // Free old storage
+        //     allocator.free(self.buffer);
+
+        //     // Update ring metadata
+        //     self.buffer = new_buffer;
+        //     self.capacity = new_capacity;
+        //     self.head = 0;
+        //     self.tail = self.count % new_capacity; // safe even if capacity == count
+        // }
+
+        pub fn resize(self: *Self, allocator: std.mem.Allocator, new_capacity: usize) !void {
+            // Don't allow shrink that would truncate existing data
+            if (self.count > new_capacity)
+                return error.OutOfMemory;
+
+            // Make data contiguous and head equal 0
+            std.debug.print("before linearize!: {any}\n", .{self.buffer});
+            self.linearize();
+
+            std.debug.print("after linearize!: {any}\n", .{self.buffer});
+
+            // Allocate the new backing buffer
+            const new_buffer = try allocator.alloc(T, new_capacity);
+            errdefer allocator.free(new_buffer);
+
+            // Copy valid elements into the new buffer
+            @memcpy(new_buffer[0..self.count], self.buffer[0..self.count]);
+
+            // Free old storage
+            allocator.free(self.buffer);
+
+            // Update ring metadata
+            self.buffer = new_buffer;
+            self.capacity = new_capacity;
+            self.head = 0;
+            self.tail = self.count % self.capacity;
         }
     };
 }
@@ -730,4 +816,115 @@ test "sorting" {
     }.runner;
 
     try run_test();
+}
+
+test "resizing" {
+    const allocator = testing.allocator;
+
+    var ring_buffer = try RingBuffer(u8).init(allocator, 3);
+    defer ring_buffer.deinit();
+
+    try ring_buffer.enqueue(1);
+    try ring_buffer.enqueue(2);
+    try ring_buffer.enqueue(3);
+
+    // current order
+    // [1 head, 2, 3 tail]
+    try testing.expectEqual(1, ring_buffer.peek(0).?);
+    try testing.expectEqual(2, ring_buffer.peek(1).?);
+    try testing.expectEqual(3, ring_buffer.peek(2).?);
+    // std.debug.print("initial fill - head: {}, tail: {}, current buffer: {any}\n", .{
+    //     ring_buffer.head,
+    //     ring_buffer.tail,
+    //     ring_buffer.buffer,
+    // });
+
+    try testing.expectError(error.BufferFull, ring_buffer.enqueue(4));
+
+    // try to resize to a smaller capacity
+    try testing.expectEqual(3, ring_buffer.capacity);
+    try testing.expectError(error.OutOfMemory, ring_buffer.resize(allocator, 2));
+
+    // dequeue/requeue to shuffle guts
+    _ = ring_buffer.dequeue();
+    try ring_buffer.enqueue(1);
+
+    // current order
+    // [1 tail, 2 head, 3]
+    try testing.expectEqual(2, ring_buffer.peek(0).?);
+    try testing.expectEqual(3, ring_buffer.peek(1).?);
+    try testing.expectEqual(1, ring_buffer.peek(2).?);
+    // std.debug.print("pre resize - head: {}, tail: {}, current buffer: {any}\n", .{
+    //     ring_buffer.head,
+    //     ring_buffer.tail,
+    //     ring_buffer.buffer,
+    // });
+
+    try ring_buffer.resize(allocator, 10);
+    // std.debug.print("post resize - head: {}, tail: {}, current buffer: {any}\n", .{
+    //     ring_buffer.head,
+    //     ring_buffer.tail,
+    //     ring_buffer.buffer,
+    // });
+
+    try testing.expectEqual(10, ring_buffer.capacity);
+
+    // current order
+    // [2 head, 3, 1 tail]
+    try testing.expectEqual(2, ring_buffer.peek(0).?);
+    try testing.expectEqual(3, ring_buffer.peek(1).?);
+    try testing.expectEqual(1, ring_buffer.peek(2).?);
+
+    _ = ring_buffer.dequeue();
+    _ = ring_buffer.dequeue();
+    _ = ring_buffer.dequeue();
+
+    try testing.expectEqual(true, ring_buffer.isEmpty());
+
+    // std.debug.print("post empty - head: {}, tail: {}, current buffer: {any}\n", .{
+    //     ring_buffer.head,
+    //     ring_buffer.tail,
+    //     ring_buffer.buffer,
+    // });
+
+    try ring_buffer.enqueue(4);
+    try ring_buffer.enqueue(5);
+    try ring_buffer.enqueue(6);
+    try ring_buffer.enqueue(1);
+    try ring_buffer.enqueue(2);
+    try ring_buffer.enqueue(3);
+
+    try testing.expectEqual(6, ring_buffer.count);
+
+    // current order
+    // [ _, _, _ , 4 head, 5, 6, 1, 2, 3 tail, _ ]
+    try testing.expectEqual(4, ring_buffer.peek(0).?);
+    try testing.expectEqual(5, ring_buffer.peek(1).?);
+    try testing.expectEqual(6, ring_buffer.peek(2).?);
+    try testing.expectEqual(1, ring_buffer.peek(3).?);
+    try testing.expectEqual(2, ring_buffer.peek(4).?);
+    try testing.expectEqual(3, ring_buffer.peek(ring_buffer.count - 1).?);
+    std.debug.print("pre reseize - head: {}, tail: {}, current buffer: {any}\n", .{
+        ring_buffer.head,
+        ring_buffer.tail,
+        ring_buffer.buffer,
+    });
+
+    // resize to the exact capacity required
+    ring_buffer.linearize();
+    try ring_buffer.resize(allocator, 6);
+    // [ 4 head, 5, 6, 1, 2, 3 tail ]
+    std.debug.print("post reseize - head: {}, tail: {}, current buffer: {any}\n", .{
+        ring_buffer.head,
+        ring_buffer.tail,
+        ring_buffer.buffer,
+    });
+
+    try testing.expectEqual(6, ring_buffer.capacity);
+    try testing.expectEqual(4, ring_buffer.peek(0).?);
+    try testing.expectEqual(5, ring_buffer.peek(1).?);
+    try testing.expectEqual(6, ring_buffer.peek(2).?);
+    try testing.expectEqual(1, ring_buffer.peek(3).?);
+    try testing.expectEqual(2, ring_buffer.peek(4).?);
+    try testing.expectEqual(3, ring_buffer.peek(5).?);
 }
