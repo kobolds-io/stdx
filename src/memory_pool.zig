@@ -63,7 +63,7 @@ pub fn MemoryPool(comptime T: type) type {
             }
 
             for (backing_buffer.items) |*v| {
-                try free_queue.enqueue(v);
+                free_queue.enqueueAssumeCapacity(v);
             }
 
             // if the backing buffer does not match the free queue, this means that the memory pool
@@ -181,7 +181,7 @@ pub fn MemoryPool(comptime T: type) type {
                 unreachable;
             }
 
-            self.free_list.enqueue(ptr) catch @panic("could not enqueue");
+            self.free_list.enqueueAssumeCapacity(ptr);
         }
     };
 }
