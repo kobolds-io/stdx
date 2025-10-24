@@ -370,45 +370,10 @@ pub fn RingBuffer(comptime T: type) type {
             return self.buffer[real_index];
         }
 
-        // helper reverse function
-        fn reverse(buffer: []T, start: usize, end: usize) void {
-            var i = start;
-            var j = end - 1;
-            while (i < j) {
-                const tmp = buffer[i];
-                buffer[i] = buffer[j];
-                buffer[j] = tmp;
-                i += 1;
-                j -= 1;
-            }
-        }
-
-        // pub fn linearize(self: *Self) void {
-        //     if (self.count <= 1 or self.head == 0) return;
-
-        //     const count = self.count;
-        //     const cap = self.capacity;
-        //     const head = self.head;
-
-        //     reverse(self.buffer, 0, head);
-
-        //     var logical_end = head + count;
-        //     if (logical_end > cap) logical_end = cap;
-
-        //     reverse(self.buffer, head, logical_end);
-
-        //     reverse(self.buffer, 0, count);
-
-        //     self.head = 0;
-        //     self.tail = count % cap;
-        // }
-
         /// Reorder the items in the ring buffer in place where the head is now at index 0
         /// and the tail is moved to the last index (ring_buffer.count - 1) in the current list.
         pub fn linearize(self: *Self) void {
             if (self.count == 0 or self.head == 0) return; // already linear or empty
-
-            const capacity = self.buffer.len;
 
             // If the data does not wrap, just copy the values to the front of the buffer
             if (self.head < self.tail) {
@@ -420,7 +385,7 @@ pub fn RingBuffer(comptime T: type) type {
 
                 std.mem.reverse(T, self.buffer[0..self.head]);
                 std.mem.reverse(T, self.buffer[self.head..]);
-                std.mem.reverse(T, self.buffer[0..capacity]);
+                std.mem.reverse(T, self.buffer[0..self.capacity]);
             }
 
             // reset metadata
