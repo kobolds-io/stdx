@@ -43,7 +43,7 @@ pub fn main() !void {
 
     // dequeue many items from the queue
     var out: [2]u64 = [_]u64{0} ** 2;
-    const dequeued_items_count = ring_buffer.dequeueMany(&out);
+    const dequeued_items_count = ring_buffer.dequeueSlice(&out);
 
     assert(dequeued_items_count == out.len);
 
