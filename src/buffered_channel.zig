@@ -34,7 +34,7 @@ pub fn BufferedChannel(comptime T: type) type {
                 self.not_full.wait(&self.mutex);
             }
 
-            self.buffer.enqueue(value) catch unreachable;
+            self.buffer.enqueueAssumeCapacity(value);
             self.not_empty.signal();
         }
 
@@ -71,7 +71,7 @@ pub fn BufferedChannel(comptime T: type) type {
                 };
             }
 
-            self.buffer.enqueue(value) catch unreachable;
+            self.buffer.enqueueAssumeCapacity(value);
             self.not_empty.signal();
         }
 

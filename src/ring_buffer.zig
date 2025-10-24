@@ -73,8 +73,18 @@ pub fn RingBuffer(comptime T: type) type {
         /// Prepend a single item at the `head` position of the ring buffer. If there
         /// is no available slot in the ring buffer `prepend` returns an error. Every
         /// prepended item increments the ring buffer `count`
-        pub fn prepend(self: *Self, value: T) RingBufferError!void {
-            if (self.isFull()) return RingBufferError.BufferFull;
+        pub fn prepend(self: *Self, allocator: std.mem.Allocator, value: T) !void {
+            if (self.isFull()) {
+                try self.resize(allocator, self.capacity * 2);
+            }
+
+            return self.prependAssumeCapacity(value);
+        }
+
+        /// Prepend a value without checking if there is capacity. Will panic if there is not enough space in
+        /// the backing buffer to fit this new value.
+        pub fn prependAssumeCapacity(self: *Self, value: T) void {
+            if (self.isFull()) unreachable;
 
             self.head = (self.head + self.capacity - 1) % self.capacity;
             self.buffer[self.head] = value;
@@ -84,8 +94,19 @@ pub fn RingBuffer(comptime T: type) type {
         /// Enqueue a single item at the `tail` position of the ring buffer. If there
         /// is no available slot in the ring buffer `enqueue` returns an error. Every
         /// enqueued item increments the ring buffer `count`.
-        pub fn enqueue(self: *Self, value: T) RingBufferError!void {
-            if (self.isFull()) return RingBufferError.BufferFull;
+        pub fn enqueue(self: *Self, allocator: std.mem.Allocator, value: T) !void {
+            if (self.isFull()) {
+                try self.resize(allocator, self.capacity * 2);
+            }
+
+            // we should assume that we now have capacity
+            return self.enqueueAssumeCapacity(value);
+        }
+
+        /// Enqueue a value without checking if there is capacity. Will panic if there is not enough space in
+        /// the backing buffer to fit this new value.
+        pub fn enqueueAssumeCapacity(self: *Self, value: T) void {
+            if (self.isFull()) unreachable;
 
             self.buffer[self.tail] = value;
             self.tail = (self.tail + 1) % self.capacity;
@@ -321,7 +342,7 @@ pub fn RingBuffer(comptime T: type) type {
         /// fill the ring buffer's remaining available slots with `value`.
         pub fn fill(self: *Self, value: T) void {
             for (0..self.available()) |_| {
-                self.enqueue(value) catch unreachable;
+                self.enqueueAssumeCapacity(value);
             }
         }
 
@@ -502,9 +523,11 @@ test "reset" {
 }
 
 test "prepend" {
-    const allocator = testing.allocator;
+    var buf: [10]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    const allocator = fba.allocator();
 
-    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 10);
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, buf.len);
     defer ring_buffer.deinit(allocator);
 
     const test_value: u8 = 231;
@@ -517,28 +540,25 @@ test "prepend" {
     try testing.expectEqual(33, ring_buffer.dequeue().?);
     try testing.expectEqual(1, ring_buffer.available());
 
-    try ring_buffer.prepend(test_value);
-
-    try testing.expectEqual(0, ring_buffer.available());
+    try ring_buffer.prepend(allocator, test_value);
 
     try testing.expectEqual(true, ring_buffer.isFull());
-    try testing.expectError(RingBufferError.BufferFull, ring_buffer.prepend(test_value));
-
-    // dequeue the item at the had of the queue
-    try testing.expectEqual(test_value, ring_buffer.dequeue().?);
+    try testing.expectError(error.OutOfMemory, ring_buffer.prepend(allocator, test_value));
 }
 
 test "enqueue" {
-    const allocator = testing.allocator;
+    var buf: [10]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    const allocator = fba.allocator();
 
-    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 10);
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, buf.len);
     defer ring_buffer.deinit(allocator);
 
     const test_value: u8 = 231;
 
     try testing.expectEqual(0, ring_buffer.count);
 
-    try ring_buffer.enqueue(test_value);
+    try ring_buffer.enqueue(allocator, test_value);
 
     try testing.expectEqual(1, ring_buffer.count);
 
@@ -546,7 +566,7 @@ test "enqueue" {
     ring_buffer.fill(33);
 
     try testing.expectEqual(true, ring_buffer.isFull());
-    try testing.expectError(RingBufferError.BufferFull, ring_buffer.enqueue(test_value));
+    try testing.expectError(error.OutOfMemory, ring_buffer.enqueue(allocator, test_value));
 }
 
 test "dequeue" {
@@ -702,14 +722,14 @@ test "iterator functionality" {
     var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 5);
     defer ring_buffer.deinit(allocator);
 
-    try ring_buffer.enqueue(1);
-    try ring_buffer.enqueue(2);
-    try ring_buffer.enqueue(3);
-    try ring_buffer.enqueue(4);
-    try ring_buffer.enqueue(5);
+    try ring_buffer.enqueue(allocator, 1);
+    try ring_buffer.enqueue(allocator, 2);
+    try ring_buffer.enqueue(allocator, 3);
+    try ring_buffer.enqueue(allocator, 4);
+    try ring_buffer.enqueue(allocator, 5);
 
     _ = ring_buffer.dequeue();
-    try ring_buffer.enqueue(1);
+    try ring_buffer.enqueue(allocator, 1);
 
     const expected = [_]u8{ 2, 3, 4, 5, 1 };
 
@@ -731,9 +751,9 @@ test "peeking" {
     var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 3);
     defer ring_buffer.deinit(allocator);
 
-    try ring_buffer.enqueue(1);
-    try ring_buffer.enqueue(2);
-    try ring_buffer.enqueue(3);
+    try ring_buffer.enqueue(allocator, 1);
+    try ring_buffer.enqueue(allocator, 2);
+    try ring_buffer.enqueue(allocator, 3);
 
     try testing.expectEqual(1, ring_buffer.peek(0).?);
     try testing.expectEqual(2, ring_buffer.peek(1).?);
@@ -760,9 +780,9 @@ test "sorting" {
             var ring_buffer_1 = try RingBuffer(u8).initCapacity(allocator, 3);
             defer ring_buffer_1.deinit(allocator);
 
-            try ring_buffer_1.enqueue(3);
-            try ring_buffer_1.enqueue(2);
-            try ring_buffer_1.enqueue(1);
+            try ring_buffer_1.enqueue(allocator, 3);
+            try ring_buffer_1.enqueue(allocator, 2);
+            try ring_buffer_1.enqueue(allocator, 1);
 
             try testing.expectEqual(3, ring_buffer_1.count);
             try testing.expectEqual(3, ring_buffer_1.peek(0).?);
@@ -780,9 +800,9 @@ test "sorting" {
             var ring_buffer_2 = try RingBuffer(TestStruct).initCapacity(allocator, 3);
             defer ring_buffer_2.deinit(allocator);
 
-            try ring_buffer_2.enqueue(.{ .data = 10 });
-            try ring_buffer_2.enqueue(.{ .data = 29 });
-            try ring_buffer_2.enqueue(.{ .data = 2 });
+            try ring_buffer_2.enqueue(allocator, .{ .data = 10 });
+            try ring_buffer_2.enqueue(allocator, .{ .data = 29 });
+            try ring_buffer_2.enqueue(allocator, .{ .data = 2 });
 
             try testing.expectEqual(3, ring_buffer_2.count);
             try testing.expectEqual(10, ring_buffer_2.peek(0).?.data);
@@ -807,9 +827,9 @@ test "resizing" {
     var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 3);
     defer ring_buffer.deinit(allocator);
 
-    try ring_buffer.enqueue(1);
-    try ring_buffer.enqueue(2);
-    try ring_buffer.enqueue(3);
+    ring_buffer.enqueueAssumeCapacity(1);
+    ring_buffer.enqueueAssumeCapacity(2);
+    ring_buffer.enqueueAssumeCapacity(3);
 
     // current order
     // [1(h), 2, 3(t)]
@@ -817,7 +837,7 @@ test "resizing" {
     try testing.expectEqual(2, ring_buffer.peek(1).?);
     try testing.expectEqual(3, ring_buffer.peek(2).?);
 
-    try testing.expectError(error.BufferFull, ring_buffer.enqueue(4));
+    try testing.expectEqual(true, ring_buffer.isFull());
 
     // try to resize to a smaller capacity
     try testing.expectEqual(3, ring_buffer.capacity);
@@ -825,7 +845,7 @@ test "resizing" {
 
     // dequeue/requeue to shuffle guts
     _ = ring_buffer.dequeue();
-    try ring_buffer.enqueue(1);
+    ring_buffer.enqueueAssumeCapacity(1);
 
     // current order
     // [1(t), 2(h), 3]
@@ -849,12 +869,12 @@ test "resizing" {
 
     try testing.expectEqual(true, ring_buffer.isEmpty());
 
-    try ring_buffer.enqueue(4);
-    try ring_buffer.enqueue(5);
-    try ring_buffer.enqueue(6);
-    try ring_buffer.enqueue(1);
-    try ring_buffer.enqueue(2);
-    try ring_buffer.enqueue(3);
+    ring_buffer.enqueueAssumeCapacity(4);
+    ring_buffer.enqueueAssumeCapacity(5);
+    ring_buffer.enqueueAssumeCapacity(6);
+    ring_buffer.enqueueAssumeCapacity(1);
+    ring_buffer.enqueueAssumeCapacity(2);
+    ring_buffer.enqueueAssumeCapacity(3);
 
     try testing.expectEqual(6, ring_buffer.count);
 
