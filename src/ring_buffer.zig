@@ -158,7 +158,7 @@ pub fn RingBuffer(comptime T: type) type {
         ///
         /// **Note** As a maximum, `dequeueMany` will only dequeue as many items
         /// can fit within the capacity of the `out` slice.
-        pub fn dequeueMany(self: *Self, out: []T) usize {
+        pub fn dequeueSlice(self: *Self, out: []T) usize {
             var removed_count: usize = 0;
             for (out) |*slot| {
                 if (self.isEmpty()) break;
@@ -177,17 +177,27 @@ pub fn RingBuffer(comptime T: type) type {
         /// This method appends all elements from the `other` ring buffer into `self`,
         /// preserving the order of items as they appeared in `other`.
         /// The operation is destructive to `other`
-        pub fn concatenate(self: *Self, other: *Self) !usize {
-            if (self.available() < other.count) return RingBufferError.BufferFull;
+        pub fn concatenate(self: *Self, allocator: std.mem.Allocator, other: *Self) !usize {
+            if (self.count + other.count > self.capacity) {
+                // capacity required to accomodate all values
+                const diff = other.count + self.count;
+                const target_capacity = @max(diff, self.capacity * 2);
 
-            const capacity = self.capacity;
+                // will either double in capacity or accomodate exactly the required number of slots
+                try self.resize(allocator, target_capacity);
+            }
 
+            return self.concatenateAssumeCapacity(other);
+        }
+
+        /// Concatenate all items within other into self
+        pub fn concatenateAssumeCapacity(self: *Self, other: *Self) usize {
             var count: usize = 0;
             while (count < other.count) : (count += 1) {
-                const index = (other.head + count) % capacity;
+                const index = (other.head + count) % self.capacity;
                 const value = other.buffer[index];
                 self.buffer[self.tail] = value;
-                self.tail = (self.tail + 1) % capacity;
+                self.tail = (self.tail + 1) % self.capacity;
             }
 
             self.count += other.count;
@@ -196,7 +206,8 @@ pub fn RingBuffer(comptime T: type) type {
             return count;
         }
 
-        /// Concatenate as many items as possible from another ring buffer into this one.
+        /// Concatenate as many items as possible from another ring buffer into this one without
+        /// resizing the backing buffer.
         ///
         /// This method appends up to `self.available()` elements from the `other` ring buffer
         /// into `self`, preserving the order of items as they appeared in `other`.
@@ -227,9 +238,22 @@ pub fn RingBuffer(comptime T: type) type {
         /// preserving both the order of the items as they appeared in `other` as well
         /// and the contents of `other`.
         /// This operation is not destructive to `other`
-        pub fn copy(self: *Self, other: *Self) !usize {
-            if (self.available() < other.count) return RingBufferError.BufferFull;
+        pub fn copy(self: *Self, allocator: std.mem.Allocator, other: *Self) !usize {
+            if (self.count + other.count > self.capacity) {
+                // capacity required to accomodate all values
+                const diff = other.count + self.count;
+                const target_capacity = @max(diff, self.capacity * 2);
 
+                // will either double in capacity or accomodate exactly the required number of slots
+                try self.resize(allocator, target_capacity);
+            }
+
+            return self.copyAssumeCapacity(other);
+        }
+
+        /// Copy the contents of another ring buffer into this one while preserving
+        /// the contents in the `other` ring buffer without checking capacity
+        pub fn copyAssumeCapacity(self: *Self, other: *Self) usize {
             var count: usize = 0;
             while (count < other.count) : (count += 1) {
                 const index = (other.head + count) % other.capacity;
@@ -594,7 +618,7 @@ test "dequeueMany" {
     try testing.expectEqual(true, ring_buffer.isFull());
 
     var out: [100]u8 = [_]u8{0} ** 100;
-    const dequeued_items_count = ring_buffer.dequeueMany(&out);
+    const dequeued_items_count = ring_buffer.dequeueSlice(&out);
 
     try testing.expectEqual(true, ring_buffer.isEmpty());
 
@@ -617,14 +641,14 @@ test "concatenate" {
     try b.enqueueSlice(allocator, &.{ 4, 5 });
 
     const expected_items_concatenated = b.count;
-    const items_concatenated = try a.concatenate(&b);
+    const items_concatenated = try a.concatenate(allocator, &b);
     try testing.expectEqual(expected_items_concatenated, items_concatenated);
 
     try testing.expectEqual(@as(usize, 5), a.count);
     try testing.expectEqual(@as(usize, 0), b.count);
 
     var buf: [5]usize = undefined;
-    const n = a.dequeueMany(&buf);
+    const n = a.dequeueSlice(&buf);
     try testing.expectEqualSlices(usize, &.{ 1, 2, 3, 4, 5 }, buf[0..n]);
 }
 
@@ -646,7 +670,7 @@ test "copy preserves other and copies all values in order" {
     try testing.expectEqual(true, dest.isEmpty());
 
     // Perform the copy
-    const n = try dest.copy(&src);
+    const n = try dest.copy(allocator, &src);
 
     // ensure that the dest.count increased by n
     try testing.expectEqual(n, dest.count);
@@ -674,19 +698,21 @@ test "copy preserves other and copies all values in order" {
 
 test "copy fails when not enough space in destination" {
     const allocator = testing.allocator;
+    var buf: [3]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    const dest_allocator = fba.allocator();
 
     var src = try RingBuffer(u8).initCapacity(allocator, 5);
     defer src.deinit(allocator);
 
-    var dest = try RingBuffer(u8).initCapacity(allocator, 3);
-    defer dest.deinit(allocator);
+    var dest = try RingBuffer(u8).initCapacity(dest_allocator, 3);
+    defer dest.deinit(dest_allocator);
 
     // Fill source with 5 values
     src.fill(7);
 
     // Try copying into a smaller destination
-    const result = dest.copy(&src);
-    try testing.expectError(RingBufferError.BufferFull, result);
+    try testing.expectError(error.OutOfMemory, dest.copy(dest_allocator, &src));
 
     // Destination should still be empty
     try testing.expectEqual(true, dest.isEmpty());
