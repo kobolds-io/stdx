@@ -11,11 +11,11 @@ pub fn main() !void {
 
     // Create a basic ring buffer
     var ring_buffer = try RingBuffer(u64).init(allocator, 100);
-    defer ring_buffer.deinit();
+    defer ring_buffer.deinit(allocator);
 
     // Enqueue a single item
     const first_value: u64 = 10;
-    try ring_buffer.enqueue(first_value);
+    try ring_buffer.enqueue(allocator, first_value);
 
     assert(ring_buffer.count == 1);
 
