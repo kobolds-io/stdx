@@ -18,12 +18,12 @@ pub fn BufferedChannel(comptime T: type) type {
 
         pub fn init(allocator: std.mem.Allocator, buffer_capacity: usize) !Self {
             return Self{
-                .buffer = try RingBuffer(T).init(allocator, buffer_capacity),
+                .buffer = try RingBuffer(T).initCapacity(allocator, buffer_capacity),
             };
         }
 
-        pub fn deinit(self: *Self) void {
-            self.buffer.deinit();
+        pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+            self.buffer.deinit(allocator);
         }
 
         pub fn send(self: *Self, value: T) void {
@@ -135,7 +135,7 @@ test "multi items" {
     const allocator = testing.allocator;
 
     var channel = try BufferedChannel(usize).init(allocator, 10);
-    defer channel.deinit();
+    defer channel.deinit(allocator);
 
     // multiple items can be buffered
     for (0..channel.capacity()) |i| {
@@ -155,7 +155,7 @@ test "full behavior" {
     const allocator = testing.allocator;
 
     var channel = try BufferedChannel(usize).init(allocator, 100);
-    defer channel.deinit();
+    defer channel.deinit(allocator);
 
     // start a fast sender
     const fastSend = struct {
@@ -199,7 +199,7 @@ test "receive timeouts and cancellation" {
     const allocator = testing.allocator;
 
     var channel = try BufferedChannel(usize).init(allocator, 100);
-    defer channel.deinit();
+    defer channel.deinit(allocator);
 
     const receiver = struct {
         pub fn do(running: *bool, chan: *BufferedChannel(usize), delay: u64, cancel_token: *CancellationToken) void {
@@ -230,7 +230,7 @@ test "send timeouts and cancellation" {
     const allocator = testing.allocator;
 
     var channel = try BufferedChannel(usize).init(allocator, 10);
-    defer channel.deinit();
+    defer channel.deinit(allocator);
 
     // fill the channel up
     for (0..channel.buffer.capacity) |i| {

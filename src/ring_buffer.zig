@@ -27,9 +27,6 @@ pub fn RingBuffer(comptime T: type) type {
             }
         };
 
-        /// allocator used to `alloc` the `buffer`. This allocator should have a
-        /// lifetime longer than the ring buffer.
-        allocator: std.mem.Allocator,
         /// total number of slots created during creation. The size of the `buffer`
         /// allocated during `init` is equal to the `capacity`.
         capacity: usize,
@@ -42,12 +39,11 @@ pub fn RingBuffer(comptime T: type) type {
         /// current number of items occupying slots
         count: usize,
 
-        pub fn init(allocator: std.mem.Allocator, capacity: usize) !Self {
+        pub fn initCapacity(allocator: std.mem.Allocator, capacity: usize) !Self {
             const buffer = try allocator.alloc(T, capacity);
             errdefer allocator.free(buffer);
 
             return Self{
-                .allocator = allocator,
                 .capacity = capacity,
                 .buffer = buffer,
                 .head = 0,
@@ -56,8 +52,16 @@ pub fn RingBuffer(comptime T: type) type {
             };
         }
 
-        pub fn deinit(self: *Self) void {
-            self.allocator.free(self.buffer);
+        pub const empty: Self = .{
+            .capacity = 0,
+            .buffer = undefined,
+            .head = 0,
+            .tail = 0,
+            .count = 0,
+        };
+
+        pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+            allocator.free(self.buffer);
         }
 
         /// return the number of available slots remaining in the ring buffer. An
@@ -437,15 +441,15 @@ pub fn RingBuffer(comptime T: type) type {
 test "init/deinit" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 100);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 100);
+    defer ring_buffer.deinit(allocator);
 }
 
 test "fill" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 100);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 100);
+    defer ring_buffer.deinit(allocator);
 
     // Assert that the ring buffer is completely empty with no items in any slots.
     try testing.expectEqual(true, ring_buffer.isEmpty());
@@ -469,8 +473,8 @@ test "fill" {
 test "reset" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 100);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 100);
+    defer ring_buffer.deinit(allocator);
 
     const test_value: u8 = 231;
 
@@ -500,8 +504,8 @@ test "reset" {
 test "prepend" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 10);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 10);
+    defer ring_buffer.deinit(allocator);
 
     const test_value: u8 = 231;
 
@@ -527,8 +531,8 @@ test "prepend" {
 test "enqueue" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 10);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 10);
+    defer ring_buffer.deinit(allocator);
 
     const test_value: u8 = 231;
 
@@ -548,8 +552,8 @@ test "enqueue" {
 test "dequeue" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 10);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 10);
+    defer ring_buffer.deinit(allocator);
 
     const test_value: u8 = 231;
 
@@ -572,8 +576,8 @@ test "enqueueMany" {
     const test_value: u8 = 231;
     const values: [13]u8 = [_]u8{test_value} ** 13;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 10);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 10);
+    defer ring_buffer.deinit(allocator);
 
     try testing.expectEqual(true, ring_buffer.isEmpty());
 
@@ -586,8 +590,8 @@ test "enqueueMany" {
 test "dequeueMany" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 10);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 10);
+    defer ring_buffer.deinit(allocator);
 
     const test_value: u8 = 231;
     ring_buffer.fill(test_value);
@@ -608,11 +612,11 @@ test "dequeueMany" {
 
 test "concatenate" {
     const allocator = std.testing.allocator;
-    var a = try RingBuffer(usize).init(allocator, 10);
-    defer a.deinit();
+    var a = try RingBuffer(usize).initCapacity(allocator, 10);
+    defer a.deinit(allocator);
 
-    var b = try RingBuffer(usize).init(allocator, 5);
-    defer b.deinit();
+    var b = try RingBuffer(usize).initCapacity(allocator, 5);
+    defer b.deinit(allocator);
 
     _ = a.enqueueMany(&.{ 1, 2, 3 });
     _ = b.enqueueMany(&.{ 4, 5 });
@@ -632,11 +636,11 @@ test "concatenate" {
 test "copy preserves other and copies all values in order" {
     const allocator = testing.allocator;
 
-    var src = try RingBuffer(u8).init(allocator, 10);
-    defer src.deinit();
+    var src = try RingBuffer(u8).initCapacity(allocator, 10);
+    defer src.deinit(allocator);
 
-    var dest = try RingBuffer(u8).init(allocator, 10);
-    defer dest.deinit();
+    var dest = try RingBuffer(u8).initCapacity(allocator, 10);
+    defer dest.deinit(allocator);
 
     // Fill the source buffer with predictable values
     const values: [5]u8 = .{ 10, 20, 30, 40, 50 };
@@ -675,11 +679,11 @@ test "copy preserves other and copies all values in order" {
 test "copy fails when not enough space in destination" {
     const allocator = testing.allocator;
 
-    var src = try RingBuffer(u8).init(allocator, 5);
-    defer src.deinit();
+    var src = try RingBuffer(u8).initCapacity(allocator, 5);
+    defer src.deinit(allocator);
 
-    var dest = try RingBuffer(u8).init(allocator, 3);
-    defer dest.deinit();
+    var dest = try RingBuffer(u8).initCapacity(allocator, 3);
+    defer dest.deinit(allocator);
 
     // Fill source with 5 values
     src.fill(7);
@@ -695,8 +699,8 @@ test "copy fails when not enough space in destination" {
 test "iterator functionality" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 5);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 5);
+    defer ring_buffer.deinit(allocator);
 
     try ring_buffer.enqueue(1);
     try ring_buffer.enqueue(2);
@@ -724,8 +728,8 @@ test "iterator functionality" {
 test "peeking" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 3);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 3);
+    defer ring_buffer.deinit(allocator);
 
     try ring_buffer.enqueue(1);
     try ring_buffer.enqueue(2);
@@ -753,8 +757,8 @@ test "sorting" {
         pub fn runner() !void {
             const allocator = testing.allocator;
 
-            var ring_buffer_1 = try RingBuffer(u8).init(allocator, 3);
-            defer ring_buffer_1.deinit();
+            var ring_buffer_1 = try RingBuffer(u8).initCapacity(allocator, 3);
+            defer ring_buffer_1.deinit(allocator);
 
             try ring_buffer_1.enqueue(3);
             try ring_buffer_1.enqueue(2);
@@ -773,8 +777,8 @@ test "sorting" {
             try testing.expectEqual(3, ring_buffer_1.peek(2).?);
 
             // try sorting a more complex data type
-            var ring_buffer_2 = try RingBuffer(TestStruct).init(allocator, 3);
-            defer ring_buffer_2.deinit();
+            var ring_buffer_2 = try RingBuffer(TestStruct).initCapacity(allocator, 3);
+            defer ring_buffer_2.deinit(allocator);
 
             try ring_buffer_2.enqueue(.{ .data = 10 });
             try ring_buffer_2.enqueue(.{ .data = 29 });
@@ -800,8 +804,8 @@ test "sorting" {
 test "resizing" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 3);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 3);
+    defer ring_buffer.deinit(allocator);
 
     try ring_buffer.enqueue(1);
     try ring_buffer.enqueue(2);
