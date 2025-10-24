@@ -129,18 +129,27 @@ pub fn RingBuffer(comptime T: type) type {
         /// slice exeeds the available slots in the ring buffer, then only the maximum
         /// items will be added without exceeding the capacity of the ring buffer.
         /// `enqueueMany` returns the number of items inserted into the ring buffer.
-        pub fn enqueueMany(self: *Self, values: []const T) usize {
-            var added_count: usize = 0;
+        pub fn enqueueSlice(self: *Self, allocator: std.mem.Allocator, values: []const T) !void {
+            if (self.count + values.len > self.capacity) {
+                // capacity required to accomodate all values
+                const diff = values.len + self.count;
+                const target_capacity = @max(diff, self.capacity * 2);
+
+                // will either double in capacity or accomodate exactly the required number of slots
+                try self.resize(allocator, target_capacity);
+            }
+
+            return self.enqueueSliceAssumeCapacity(values);
+        }
+
+        pub fn enqueueSliceAssumeCapacity(self: *Self, values: []const T) void {
             for (values) |value| {
-                if (self.isFull()) break;
+                if (self.isFull()) unreachable;
 
                 self.buffer[self.tail] = value;
                 self.tail = (self.tail + 1) % self.capacity;
                 self.count += 1;
-                added_count += 1;
             }
-
-            return added_count;
         }
 
         /// Dequeue multiple items from the ring buffer. Take every dequeued
@@ -590,7 +599,7 @@ test "dequeue" {
     try testing.expectEqual(true, ring_buffer.isEmpty());
 }
 
-test "enqueueMany" {
+test "enqueueSlice" {
     const allocator = testing.allocator;
 
     const test_value: u8 = 231;
@@ -601,10 +610,11 @@ test "enqueueMany" {
 
     try testing.expectEqual(true, ring_buffer.isEmpty());
 
-    const enqueued_items_count = ring_buffer.enqueueMany(&values);
-
-    try testing.expectEqual(ring_buffer.capacity, enqueued_items_count);
+    try ring_buffer.enqueueSlice(allocator, values[0..ring_buffer.capacity]);
     try testing.expectEqual(true, ring_buffer.isFull());
+
+    // a resize should happen here
+    try ring_buffer.enqueueSlice(allocator, &values);
 }
 
 test "dequeueMany" {
@@ -638,8 +648,8 @@ test "concatenate" {
     var b = try RingBuffer(usize).initCapacity(allocator, 5);
     defer b.deinit(allocator);
 
-    _ = a.enqueueMany(&.{ 1, 2, 3 });
-    _ = b.enqueueMany(&.{ 4, 5 });
+    try a.enqueueSlice(allocator, &.{ 1, 2, 3 });
+    try b.enqueueSlice(allocator, &.{ 4, 5 });
 
     const expected_items_concatenated = b.count;
     const items_concatenated = try a.concatenate(&b);
@@ -664,7 +674,8 @@ test "copy preserves other and copies all values in order" {
 
     // Fill the source buffer with predictable values
     const values: [5]u8 = .{ 10, 20, 30, 40, 50 };
-    try testing.expectEqual(@as(usize, values.len), src.enqueueMany(&values));
+    try src.enqueueSlice(allocator, &values);
+    try testing.expectEqual(src.count, @as(usize, values.len));
 
     // Ensure destination is empty before copy
     try testing.expectEqual(true, dest.isEmpty());
@@ -684,7 +695,7 @@ test "copy preserves other and copies all values in order" {
     }
 
     // Re-enqueue the values into source for the next check
-    _ = src.enqueueMany(&values);
+    try src.enqueueSlice(allocator, &values);
 
     // Now check that dest has the same values, in same order
     for (values) |expected| {
