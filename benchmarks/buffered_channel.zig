@@ -84,10 +84,10 @@ test "BufferedChannel benchmarks" {
     }
 
     send_channel = try BufferedChannel(usize).init(allocator, data_list.capacity);
-    defer send_channel.deinit();
+    defer send_channel.deinit(allocator);
 
     receive_channel = try BufferedChannel(usize).init(allocator, data_list.capacity);
-    defer receive_channel.deinit();
+    defer receive_channel.deinit(allocator);
 
     const channel_send_title = try std.fmt.allocPrint(
         allocator,

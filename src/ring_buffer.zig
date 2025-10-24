@@ -27,9 +27,6 @@ pub fn RingBuffer(comptime T: type) type {
             }
         };
 
-        /// allocator used to `alloc` the `buffer`. This allocator should have a
-        /// lifetime longer than the ring buffer.
-        allocator: std.mem.Allocator,
         /// total number of slots created during creation. The size of the `buffer`
         /// allocated during `init` is equal to the `capacity`.
         capacity: usize,
@@ -42,12 +39,11 @@ pub fn RingBuffer(comptime T: type) type {
         /// current number of items occupying slots
         count: usize,
 
-        pub fn init(allocator: std.mem.Allocator, capacity: usize) !Self {
+        pub fn initCapacity(allocator: std.mem.Allocator, capacity: usize) !Self {
             const buffer = try allocator.alloc(T, capacity);
             errdefer allocator.free(buffer);
 
             return Self{
-                .allocator = allocator,
                 .capacity = capacity,
                 .buffer = buffer,
                 .head = 0,
@@ -56,8 +52,16 @@ pub fn RingBuffer(comptime T: type) type {
             };
         }
 
-        pub fn deinit(self: *Self) void {
-            self.allocator.free(self.buffer);
+        pub const empty: Self = .{
+            .capacity = 0,
+            .buffer = undefined,
+            .head = 0,
+            .tail = 0,
+            .count = 0,
+        };
+
+        pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+            allocator.free(self.buffer);
         }
 
         /// return the number of available slots remaining in the ring buffer. An
@@ -69,8 +73,18 @@ pub fn RingBuffer(comptime T: type) type {
         /// Prepend a single item at the `head` position of the ring buffer. If there
         /// is no available slot in the ring buffer `prepend` returns an error. Every
         /// prepended item increments the ring buffer `count`
-        pub fn prepend(self: *Self, value: T) RingBufferError!void {
-            if (self.isFull()) return RingBufferError.BufferFull;
+        pub fn prepend(self: *Self, allocator: std.mem.Allocator, value: T) !void {
+            if (self.isFull()) {
+                try self.resize(allocator, self.capacity * 2);
+            }
+
+            return self.prependAssumeCapacity(value);
+        }
+
+        /// Prepend a value without checking if there is capacity. Will panic if there is not enough space in
+        /// the backing buffer to fit this new value.
+        pub fn prependAssumeCapacity(self: *Self, value: T) void {
+            if (self.isFull()) unreachable;
 
             self.head = (self.head + self.capacity - 1) % self.capacity;
             self.buffer[self.head] = value;
@@ -80,8 +94,19 @@ pub fn RingBuffer(comptime T: type) type {
         /// Enqueue a single item at the `tail` position of the ring buffer. If there
         /// is no available slot in the ring buffer `enqueue` returns an error. Every
         /// enqueued item increments the ring buffer `count`.
-        pub fn enqueue(self: *Self, value: T) RingBufferError!void {
-            if (self.isFull()) return RingBufferError.BufferFull;
+        pub fn enqueue(self: *Self, allocator: std.mem.Allocator, value: T) !void {
+            if (self.isFull()) {
+                try self.resize(allocator, self.capacity * 2);
+            }
+
+            // we should assume that we now have capacity
+            return self.enqueueAssumeCapacity(value);
+        }
+
+        /// Enqueue a value without checking if there is capacity. Will panic if there is not enough space in
+        /// the backing buffer to fit this new value.
+        pub fn enqueueAssumeCapacity(self: *Self, value: T) void {
+            if (self.isFull()) unreachable;
 
             self.buffer[self.tail] = value;
             self.tail = (self.tail + 1) % self.capacity;
@@ -104,18 +129,27 @@ pub fn RingBuffer(comptime T: type) type {
         /// slice exeeds the available slots in the ring buffer, then only the maximum
         /// items will be added without exceeding the capacity of the ring buffer.
         /// `enqueueMany` returns the number of items inserted into the ring buffer.
-        pub fn enqueueMany(self: *Self, values: []const T) usize {
-            var added_count: usize = 0;
+        pub fn enqueueSlice(self: *Self, allocator: std.mem.Allocator, values: []const T) !void {
+            if (self.count + values.len > self.capacity) {
+                // capacity required to accomodate all values
+                const diff = values.len + self.count;
+                const target_capacity = @max(diff, self.capacity * 2);
+
+                // will either double in capacity or accomodate exactly the required number of slots
+                try self.resize(allocator, target_capacity);
+            }
+
+            return self.enqueueSliceAssumeCapacity(values);
+        }
+
+        pub fn enqueueSliceAssumeCapacity(self: *Self, values: []const T) void {
             for (values) |value| {
-                if (self.isFull()) break;
+                if (self.isFull()) unreachable;
 
                 self.buffer[self.tail] = value;
                 self.tail = (self.tail + 1) % self.capacity;
                 self.count += 1;
-                added_count += 1;
             }
-
-            return added_count;
         }
 
         /// Dequeue multiple items from the ring buffer. Take every dequeued
@@ -124,7 +158,7 @@ pub fn RingBuffer(comptime T: type) type {
         ///
         /// **Note** As a maximum, `dequeueMany` will only dequeue as many items
         /// can fit within the capacity of the `out` slice.
-        pub fn dequeueMany(self: *Self, out: []T) usize {
+        pub fn dequeueSlice(self: *Self, out: []T) usize {
             var removed_count: usize = 0;
             for (out) |*slot| {
                 if (self.isEmpty()) break;
@@ -143,17 +177,27 @@ pub fn RingBuffer(comptime T: type) type {
         /// This method appends all elements from the `other` ring buffer into `self`,
         /// preserving the order of items as they appeared in `other`.
         /// The operation is destructive to `other`
-        pub fn concatenate(self: *Self, other: *Self) !usize {
-            if (self.available() < other.count) return RingBufferError.BufferFull;
+        pub fn concatenate(self: *Self, allocator: std.mem.Allocator, other: *Self) !usize {
+            if (self.count + other.count > self.capacity) {
+                // capacity required to accomodate all values
+                const diff = other.count + self.count;
+                const target_capacity = @max(diff, self.capacity * 2);
 
-            const capacity = self.capacity;
+                // will either double in capacity or accomodate exactly the required number of slots
+                try self.resize(allocator, target_capacity);
+            }
 
+            return self.concatenateAssumeCapacity(other);
+        }
+
+        /// Concatenate all items within other into self
+        pub fn concatenateAssumeCapacity(self: *Self, other: *Self) usize {
             var count: usize = 0;
             while (count < other.count) : (count += 1) {
-                const index = (other.head + count) % capacity;
+                const index = (other.head + count) % self.capacity;
                 const value = other.buffer[index];
                 self.buffer[self.tail] = value;
-                self.tail = (self.tail + 1) % capacity;
+                self.tail = (self.tail + 1) % self.capacity;
             }
 
             self.count += other.count;
@@ -162,7 +206,8 @@ pub fn RingBuffer(comptime T: type) type {
             return count;
         }
 
-        /// Concatenate as many items as possible from another ring buffer into this one.
+        /// Concatenate as many items as possible from another ring buffer into this one without
+        /// resizing the backing buffer.
         ///
         /// This method appends up to `self.available()` elements from the `other` ring buffer
         /// into `self`, preserving the order of items as they appeared in `other`.
@@ -193,9 +238,22 @@ pub fn RingBuffer(comptime T: type) type {
         /// preserving both the order of the items as they appeared in `other` as well
         /// and the contents of `other`.
         /// This operation is not destructive to `other`
-        pub fn copy(self: *Self, other: *Self) !usize {
-            if (self.available() < other.count) return RingBufferError.BufferFull;
+        pub fn copy(self: *Self, allocator: std.mem.Allocator, other: *Self) !usize {
+            if (self.count + other.count > self.capacity) {
+                // capacity required to accomodate all values
+                const diff = other.count + self.count;
+                const target_capacity = @max(diff, self.capacity * 2);
 
+                // will either double in capacity or accomodate exactly the required number of slots
+                try self.resize(allocator, target_capacity);
+            }
+
+            return self.copyAssumeCapacity(other);
+        }
+
+        /// Copy the contents of another ring buffer into this one while preserving
+        /// the contents in the `other` ring buffer without checking capacity
+        pub fn copyAssumeCapacity(self: *Self, other: *Self) usize {
             var count: usize = 0;
             while (count < other.count) : (count += 1) {
                 const index = (other.head + count) % other.capacity;
@@ -317,7 +375,7 @@ pub fn RingBuffer(comptime T: type) type {
         /// fill the ring buffer's remaining available slots with `value`.
         pub fn fill(self: *Self, value: T) void {
             for (0..self.available()) |_| {
-                self.enqueue(value) catch unreachable;
+                self.enqueueAssumeCapacity(value);
             }
         }
 
@@ -336,45 +394,10 @@ pub fn RingBuffer(comptime T: type) type {
             return self.buffer[real_index];
         }
 
-        // helper reverse function
-        fn reverse(buffer: []T, start: usize, end: usize) void {
-            var i = start;
-            var j = end - 1;
-            while (i < j) {
-                const tmp = buffer[i];
-                buffer[i] = buffer[j];
-                buffer[j] = tmp;
-                i += 1;
-                j -= 1;
-            }
-        }
-
-        // pub fn linearize(self: *Self) void {
-        //     if (self.count <= 1 or self.head == 0) return;
-
-        //     const count = self.count;
-        //     const cap = self.capacity;
-        //     const head = self.head;
-
-        //     reverse(self.buffer, 0, head);
-
-        //     var logical_end = head + count;
-        //     if (logical_end > cap) logical_end = cap;
-
-        //     reverse(self.buffer, head, logical_end);
-
-        //     reverse(self.buffer, 0, count);
-
-        //     self.head = 0;
-        //     self.tail = count % cap;
-        // }
-
         /// Reorder the items in the ring buffer in place where the head is now at index 0
         /// and the tail is moved to the last index (ring_buffer.count - 1) in the current list.
         pub fn linearize(self: *Self) void {
             if (self.count == 0 or self.head == 0) return; // already linear or empty
-
-            const capacity = self.buffer.len;
 
             // If the data does not wrap, just copy the values to the front of the buffer
             if (self.head < self.tail) {
@@ -386,7 +409,7 @@ pub fn RingBuffer(comptime T: type) type {
 
                 std.mem.reverse(T, self.buffer[0..self.head]);
                 std.mem.reverse(T, self.buffer[self.head..]);
-                std.mem.reverse(T, self.buffer[0..capacity]);
+                std.mem.reverse(T, self.buffer[0..self.capacity]);
             }
 
             // reset metadata
@@ -437,15 +460,15 @@ pub fn RingBuffer(comptime T: type) type {
 test "init/deinit" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 100);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 100);
+    defer ring_buffer.deinit(allocator);
 }
 
 test "fill" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 100);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 100);
+    defer ring_buffer.deinit(allocator);
 
     // Assert that the ring buffer is completely empty with no items in any slots.
     try testing.expectEqual(true, ring_buffer.isEmpty());
@@ -469,8 +492,8 @@ test "fill" {
 test "reset" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 100);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 100);
+    defer ring_buffer.deinit(allocator);
 
     const test_value: u8 = 231;
 
@@ -498,10 +521,12 @@ test "reset" {
 }
 
 test "prepend" {
-    const allocator = testing.allocator;
+    var buf: [10]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    const allocator = fba.allocator();
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 10);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, buf.len);
+    defer ring_buffer.deinit(allocator);
 
     const test_value: u8 = 231;
 
@@ -513,28 +538,25 @@ test "prepend" {
     try testing.expectEqual(33, ring_buffer.dequeue().?);
     try testing.expectEqual(1, ring_buffer.available());
 
-    try ring_buffer.prepend(test_value);
-
-    try testing.expectEqual(0, ring_buffer.available());
+    try ring_buffer.prepend(allocator, test_value);
 
     try testing.expectEqual(true, ring_buffer.isFull());
-    try testing.expectError(RingBufferError.BufferFull, ring_buffer.prepend(test_value));
-
-    // dequeue the item at the had of the queue
-    try testing.expectEqual(test_value, ring_buffer.dequeue().?);
+    try testing.expectError(error.OutOfMemory, ring_buffer.prepend(allocator, test_value));
 }
 
 test "enqueue" {
-    const allocator = testing.allocator;
+    var buf: [10]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    const allocator = fba.allocator();
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 10);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, buf.len);
+    defer ring_buffer.deinit(allocator);
 
     const test_value: u8 = 231;
 
     try testing.expectEqual(0, ring_buffer.count);
 
-    try ring_buffer.enqueue(test_value);
+    try ring_buffer.enqueue(allocator, test_value);
 
     try testing.expectEqual(1, ring_buffer.count);
 
@@ -542,14 +564,14 @@ test "enqueue" {
     ring_buffer.fill(33);
 
     try testing.expectEqual(true, ring_buffer.isFull());
-    try testing.expectError(RingBufferError.BufferFull, ring_buffer.enqueue(test_value));
+    try testing.expectError(error.OutOfMemory, ring_buffer.enqueue(allocator, test_value));
 }
 
 test "dequeue" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 10);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 10);
+    defer ring_buffer.deinit(allocator);
 
     const test_value: u8 = 231;
 
@@ -566,28 +588,29 @@ test "dequeue" {
     try testing.expectEqual(true, ring_buffer.isEmpty());
 }
 
-test "enqueueMany" {
+test "enqueueSlice" {
     const allocator = testing.allocator;
 
     const test_value: u8 = 231;
     const values: [13]u8 = [_]u8{test_value} ** 13;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 10);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 10);
+    defer ring_buffer.deinit(allocator);
 
     try testing.expectEqual(true, ring_buffer.isEmpty());
 
-    const enqueued_items_count = ring_buffer.enqueueMany(&values);
-
-    try testing.expectEqual(ring_buffer.capacity, enqueued_items_count);
+    try ring_buffer.enqueueSlice(allocator, values[0..ring_buffer.capacity]);
     try testing.expectEqual(true, ring_buffer.isFull());
+
+    // a resize should happen here
+    try ring_buffer.enqueueSlice(allocator, &values);
 }
 
-test "dequeueMany" {
+test "dequeueSlice" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 10);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 10);
+    defer ring_buffer.deinit(allocator);
 
     const test_value: u8 = 231;
     ring_buffer.fill(test_value);
@@ -595,7 +618,7 @@ test "dequeueMany" {
     try testing.expectEqual(true, ring_buffer.isFull());
 
     var out: [100]u8 = [_]u8{0} ** 100;
-    const dequeued_items_count = ring_buffer.dequeueMany(&out);
+    const dequeued_items_count = ring_buffer.dequeueSlice(&out);
 
     try testing.expectEqual(true, ring_buffer.isEmpty());
 
@@ -608,45 +631,46 @@ test "dequeueMany" {
 
 test "concatenate" {
     const allocator = std.testing.allocator;
-    var a = try RingBuffer(usize).init(allocator, 10);
-    defer a.deinit();
+    var a = try RingBuffer(usize).initCapacity(allocator, 10);
+    defer a.deinit(allocator);
 
-    var b = try RingBuffer(usize).init(allocator, 5);
-    defer b.deinit();
+    var b = try RingBuffer(usize).initCapacity(allocator, 5);
+    defer b.deinit(allocator);
 
-    _ = a.enqueueMany(&.{ 1, 2, 3 });
-    _ = b.enqueueMany(&.{ 4, 5 });
+    try a.enqueueSlice(allocator, &.{ 1, 2, 3 });
+    try b.enqueueSlice(allocator, &.{ 4, 5 });
 
     const expected_items_concatenated = b.count;
-    const items_concatenated = try a.concatenate(&b);
+    const items_concatenated = try a.concatenate(allocator, &b);
     try testing.expectEqual(expected_items_concatenated, items_concatenated);
 
     try testing.expectEqual(@as(usize, 5), a.count);
     try testing.expectEqual(@as(usize, 0), b.count);
 
     var buf: [5]usize = undefined;
-    const n = a.dequeueMany(&buf);
+    const n = a.dequeueSlice(&buf);
     try testing.expectEqualSlices(usize, &.{ 1, 2, 3, 4, 5 }, buf[0..n]);
 }
 
 test "copy preserves other and copies all values in order" {
     const allocator = testing.allocator;
 
-    var src = try RingBuffer(u8).init(allocator, 10);
-    defer src.deinit();
+    var src = try RingBuffer(u8).initCapacity(allocator, 10);
+    defer src.deinit(allocator);
 
-    var dest = try RingBuffer(u8).init(allocator, 10);
-    defer dest.deinit();
+    var dest = try RingBuffer(u8).initCapacity(allocator, 10);
+    defer dest.deinit(allocator);
 
     // Fill the source buffer with predictable values
     const values: [5]u8 = .{ 10, 20, 30, 40, 50 };
-    try testing.expectEqual(@as(usize, values.len), src.enqueueMany(&values));
+    try src.enqueueSlice(allocator, &values);
+    try testing.expectEqual(src.count, @as(usize, values.len));
 
     // Ensure destination is empty before copy
     try testing.expectEqual(true, dest.isEmpty());
 
     // Perform the copy
-    const n = try dest.copy(&src);
+    const n = try dest.copy(allocator, &src);
 
     // ensure that the dest.count increased by n
     try testing.expectEqual(n, dest.count);
@@ -660,7 +684,7 @@ test "copy preserves other and copies all values in order" {
     }
 
     // Re-enqueue the values into source for the next check
-    _ = src.enqueueMany(&values);
+    try src.enqueueSlice(allocator, &values);
 
     // Now check that dest has the same values, in same order
     for (values) |expected| {
@@ -674,19 +698,21 @@ test "copy preserves other and copies all values in order" {
 
 test "copy fails when not enough space in destination" {
     const allocator = testing.allocator;
+    var buf: [3]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    const dest_allocator = fba.allocator();
 
-    var src = try RingBuffer(u8).init(allocator, 5);
-    defer src.deinit();
+    var src = try RingBuffer(u8).initCapacity(allocator, 5);
+    defer src.deinit(allocator);
 
-    var dest = try RingBuffer(u8).init(allocator, 3);
-    defer dest.deinit();
+    var dest = try RingBuffer(u8).initCapacity(dest_allocator, 3);
+    defer dest.deinit(dest_allocator);
 
     // Fill source with 5 values
     src.fill(7);
 
     // Try copying into a smaller destination
-    const result = dest.copy(&src);
-    try testing.expectError(RingBufferError.BufferFull, result);
+    try testing.expectError(error.OutOfMemory, dest.copy(dest_allocator, &src));
 
     // Destination should still be empty
     try testing.expectEqual(true, dest.isEmpty());
@@ -695,17 +721,17 @@ test "copy fails when not enough space in destination" {
 test "iterator functionality" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 5);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 5);
+    defer ring_buffer.deinit(allocator);
 
-    try ring_buffer.enqueue(1);
-    try ring_buffer.enqueue(2);
-    try ring_buffer.enqueue(3);
-    try ring_buffer.enqueue(4);
-    try ring_buffer.enqueue(5);
+    try ring_buffer.enqueue(allocator, 1);
+    try ring_buffer.enqueue(allocator, 2);
+    try ring_buffer.enqueue(allocator, 3);
+    try ring_buffer.enqueue(allocator, 4);
+    try ring_buffer.enqueue(allocator, 5);
 
     _ = ring_buffer.dequeue();
-    try ring_buffer.enqueue(1);
+    try ring_buffer.enqueue(allocator, 1);
 
     const expected = [_]u8{ 2, 3, 4, 5, 1 };
 
@@ -724,12 +750,12 @@ test "iterator functionality" {
 test "peeking" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 3);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 3);
+    defer ring_buffer.deinit(allocator);
 
-    try ring_buffer.enqueue(1);
-    try ring_buffer.enqueue(2);
-    try ring_buffer.enqueue(3);
+    try ring_buffer.enqueue(allocator, 1);
+    try ring_buffer.enqueue(allocator, 2);
+    try ring_buffer.enqueue(allocator, 3);
 
     try testing.expectEqual(1, ring_buffer.peek(0).?);
     try testing.expectEqual(2, ring_buffer.peek(1).?);
@@ -753,12 +779,12 @@ test "sorting" {
         pub fn runner() !void {
             const allocator = testing.allocator;
 
-            var ring_buffer_1 = try RingBuffer(u8).init(allocator, 3);
-            defer ring_buffer_1.deinit();
+            var ring_buffer_1 = try RingBuffer(u8).initCapacity(allocator, 3);
+            defer ring_buffer_1.deinit(allocator);
 
-            try ring_buffer_1.enqueue(3);
-            try ring_buffer_1.enqueue(2);
-            try ring_buffer_1.enqueue(1);
+            try ring_buffer_1.enqueue(allocator, 3);
+            try ring_buffer_1.enqueue(allocator, 2);
+            try ring_buffer_1.enqueue(allocator, 1);
 
             try testing.expectEqual(3, ring_buffer_1.count);
             try testing.expectEqual(3, ring_buffer_1.peek(0).?);
@@ -773,12 +799,12 @@ test "sorting" {
             try testing.expectEqual(3, ring_buffer_1.peek(2).?);
 
             // try sorting a more complex data type
-            var ring_buffer_2 = try RingBuffer(TestStruct).init(allocator, 3);
-            defer ring_buffer_2.deinit();
+            var ring_buffer_2 = try RingBuffer(TestStruct).initCapacity(allocator, 3);
+            defer ring_buffer_2.deinit(allocator);
 
-            try ring_buffer_2.enqueue(.{ .data = 10 });
-            try ring_buffer_2.enqueue(.{ .data = 29 });
-            try ring_buffer_2.enqueue(.{ .data = 2 });
+            try ring_buffer_2.enqueue(allocator, .{ .data = 10 });
+            try ring_buffer_2.enqueue(allocator, .{ .data = 29 });
+            try ring_buffer_2.enqueue(allocator, .{ .data = 2 });
 
             try testing.expectEqual(3, ring_buffer_2.count);
             try testing.expectEqual(10, ring_buffer_2.peek(0).?.data);
@@ -800,12 +826,12 @@ test "sorting" {
 test "resizing" {
     const allocator = testing.allocator;
 
-    var ring_buffer = try RingBuffer(u8).init(allocator, 3);
-    defer ring_buffer.deinit();
+    var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 3);
+    defer ring_buffer.deinit(allocator);
 
-    try ring_buffer.enqueue(1);
-    try ring_buffer.enqueue(2);
-    try ring_buffer.enqueue(3);
+    ring_buffer.enqueueAssumeCapacity(1);
+    ring_buffer.enqueueAssumeCapacity(2);
+    ring_buffer.enqueueAssumeCapacity(3);
 
     // current order
     // [1(h), 2, 3(t)]
@@ -813,7 +839,7 @@ test "resizing" {
     try testing.expectEqual(2, ring_buffer.peek(1).?);
     try testing.expectEqual(3, ring_buffer.peek(2).?);
 
-    try testing.expectError(error.BufferFull, ring_buffer.enqueue(4));
+    try testing.expectEqual(true, ring_buffer.isFull());
 
     // try to resize to a smaller capacity
     try testing.expectEqual(3, ring_buffer.capacity);
@@ -821,7 +847,7 @@ test "resizing" {
 
     // dequeue/requeue to shuffle guts
     _ = ring_buffer.dequeue();
-    try ring_buffer.enqueue(1);
+    ring_buffer.enqueueAssumeCapacity(1);
 
     // current order
     // [1(t), 2(h), 3]
@@ -845,12 +871,12 @@ test "resizing" {
 
     try testing.expectEqual(true, ring_buffer.isEmpty());
 
-    try ring_buffer.enqueue(4);
-    try ring_buffer.enqueue(5);
-    try ring_buffer.enqueue(6);
-    try ring_buffer.enqueue(1);
-    try ring_buffer.enqueue(2);
-    try ring_buffer.enqueue(3);
+    ring_buffer.enqueueAssumeCapacity(4);
+    ring_buffer.enqueueAssumeCapacity(5);
+    ring_buffer.enqueueAssumeCapacity(6);
+    ring_buffer.enqueueAssumeCapacity(1);
+    ring_buffer.enqueueAssumeCapacity(2);
+    ring_buffer.enqueueAssumeCapacity(3);
 
     try testing.expectEqual(6, ring_buffer.count);
 
