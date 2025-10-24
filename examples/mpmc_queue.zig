@@ -40,8 +40,8 @@ pub fn Topic(comptime T: type) type {
             const queue = try allocator.create(RingBuffer(T));
             errdefer allocator.destroy(queue);
 
-            queue.* = try RingBuffer(T).init(allocator, TOPIC_QUEUE_SIZE);
-            errdefer queue.deinit();
+            queue.* = try RingBuffer(T).initCapacity(allocator, TOPIC_QUEUE_SIZE);
+            errdefer queue.deinit(allocator);
 
             return Self{
                 .allocator = allocator,
@@ -51,7 +51,7 @@ pub fn Topic(comptime T: type) type {
         }
 
         pub fn deinit(self: *Self) void {
-            self.queue.deinit();
+            self.queue.deinit(self.allocator);
 
             self.allocator.destroy(self.queue);
         }
@@ -75,8 +75,8 @@ pub fn Producer(comptime T: type) type {
             const queue = try allocator.create(RingBuffer(T));
             errdefer allocator.destroy(queue);
 
-            queue.* = try RingBuffer(T).init(allocator, PRODUCER_QUEUE_SIZE);
-            errdefer queue.deinit();
+            queue.* = try RingBuffer(T).initCapacity(allocator, PRODUCER_QUEUE_SIZE);
+            errdefer queue.deinit(allocator);
 
             return Self{
                 .allocator = allocator,
@@ -92,7 +92,7 @@ pub fn Producer(comptime T: type) type {
 
         pub fn deinit(self: *Self) void {
             self.backpressure.deinit();
-            self.queue.deinit();
+            self.queue.deinit(self.allocator);
             self.allocator.destroy(self.queue);
         }
 
@@ -100,7 +100,9 @@ pub fn Producer(comptime T: type) type {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            self.queue.enqueue(value) catch {
+            // this should really never happen unless the size of the allocator is fixed. So I've made it
+            // fixed size for now.
+            self.queue.enqueue(self.allocator, value) catch {
                 if (self.backpressure.items.len + 1 == PRODUCER_BACKPRESSURE_MAX_CAPACITY) {
                     log.err("producer: {} PRODUCER_BACKPRESSURE_MAX_CAPACITY reached: {}", .{
                         self.id,
@@ -126,7 +128,8 @@ pub fn Producer(comptime T: type) type {
             defer self.mutex.unlock();
 
             if (self.backpressure.items.len > 0) {
-                const n = self.topic.queue.enqueueMany(self.backpressure.items);
+                const n = self.backpressure.items.len - self.topic.queue.count;
+                try self.topic.queue.enqueueSlice(self.allocator, self.backpressure.items);
 
                 std.mem.copyForwards(VALUE_TYPE, self.backpressure.items, self.backpressure.items[n..]);
                 self.backpressure.items.len -= n;
@@ -173,8 +176,8 @@ pub fn Worker(comptime T: type) type {
             const queue = try allocator.create(RingBuffer(T));
             errdefer allocator.destroy(queue);
 
-            queue.* = try RingBuffer(T).init(allocator, WORKER_QUEUE_SIZE);
-            errdefer queue.deinit();
+            queue.* = try RingBuffer(T).initCapacity(allocator, WORKER_QUEUE_SIZE);
+            errdefer queue.deinit(allocator);
 
             return Self{
                 .allocator = allocator,
@@ -187,7 +190,7 @@ pub fn Worker(comptime T: type) type {
         }
 
         pub fn deinit(self: *Self) void {
-            self.queue.deinit();
+            self.queue.deinit(self.allocator);
             self.allocator.destroy(self.queue);
         }
 
@@ -228,7 +231,11 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var topic = try Topic(VALUE_TYPE).init(allocator);
+    var topic_buf: [(@sizeOf(VALUE_TYPE) * TOPIC_QUEUE_SIZE) * 2]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&topic_buf);
+    const topic_allocator = fba.allocator();
+
+    var topic = try Topic(VALUE_TYPE).init(topic_allocator);
     defer topic.deinit();
 
     var producers = std.array_list.Managed(*Producer(VALUE_TYPE)).init(allocator);
