@@ -606,7 +606,7 @@ test "enqueueSlice" {
     try ring_buffer.enqueueSlice(allocator, &values);
 }
 
-test "dequeueMany" {
+test "dequeueSlice" {
     const allocator = testing.allocator;
 
     var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 10);
