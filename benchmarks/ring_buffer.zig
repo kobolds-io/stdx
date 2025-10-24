@@ -24,7 +24,7 @@ const BenchmarkRingBufferPrepend = struct {
     pub fn run(self: Self, _: std.mem.Allocator) void {
         // prepend every data point in the list into the ring buffer
         for (self.list.items) |data| {
-            self.ring_buffer.prepend(data) catch unreachable;
+            self.ring_buffer.prependAssumeCapacity(data);
         }
 
         // drop ALL references immediately
@@ -48,7 +48,7 @@ const BenchmarkRingBufferEnqueue = struct {
     pub fn run(self: Self, _: std.mem.Allocator) void {
         // enqueue every data point in the list into the ring buffer
         for (self.list.items) |data| {
-            self.ring_buffer.enqueue(data) catch unreachable;
+            self.ring_buffer.enqueueAssumeCapacity(data);
         }
 
         // drop ALL references immediately
@@ -71,9 +71,7 @@ const BenchmarkRingBufferEnqueueMany = struct {
 
     pub fn run(self: Self, _: std.mem.Allocator) void {
         // enqueue every data point in the list into the ring buffer
-        const n = self.ring_buffer.enqueueMany(self.list.items);
-
-        assert(n == self.list.items.len);
+        self.ring_buffer.enqueueSliceAssumeCapacity(self.list.items);
 
         // drop ALL references immediately
         self.ring_buffer.reset();
@@ -113,7 +111,7 @@ const BenchmarkRingBufferDequeueMany = struct {
     }
 
     pub fn run(self: Self, _: std.mem.Allocator) void {
-        const n = self.ring_buffer.dequeueMany(self.list.items);
+        const n = self.ring_buffer.dequeueSlice(self.list.items);
 
         assert(self.ring_buffer.isEmpty());
         assert(n == self.list.items.len);
@@ -137,7 +135,7 @@ const BenchmarkRingBufferConcatenate = struct {
 
     pub fn run(self: Self, _: std.mem.Allocator) void {
         const other_count = self.ring_buffer_other.count;
-        _ = self.ring_buffer.concatenate(self.ring_buffer_other) catch @panic("could not execute benchmark");
+        _ = self.ring_buffer.concatenateAssumeCapacity(self.ring_buffer_other);
         assert(ring_buffer_concatenate.count == other_count);
     }
 };
@@ -158,7 +156,7 @@ const BenchmarkRingBufferCopy = struct {
     }
 
     pub fn run(self: Self, _: std.mem.Allocator) void {
-        _ = self.ring_buffer.copy(self.ring_buffer_other) catch @panic("could not execute benchmark");
+        _ = self.ring_buffer.copyAssumeCapacity(self.ring_buffer_other);
     }
 };
 
@@ -272,39 +270,39 @@ test "RingBuffer benchmarks" {
     }
 
     // Initialize all ring buffers used in benchmarks
-    ring_buffer_prepend = try RingBuffer(usize).init(allocator, @intCast(data_list.items.len));
-    defer ring_buffer_prepend.deinit();
+    ring_buffer_prepend = try RingBuffer(usize).initCapacity(allocator, @intCast(data_list.items.len));
+    defer ring_buffer_prepend.deinit(allocator);
 
-    ring_buffer_enqueue = try RingBuffer(usize).init(allocator, @intCast(data_list.items.len));
-    defer ring_buffer_enqueue.deinit();
+    ring_buffer_enqueue = try RingBuffer(usize).initCapacity(allocator, @intCast(data_list.items.len));
+    defer ring_buffer_enqueue.deinit(allocator);
 
-    ring_buffer_enqueueMany = try RingBuffer(usize).init(allocator, @intCast(data_list.items.len));
-    defer ring_buffer_enqueueMany.deinit();
+    ring_buffer_enqueueMany = try RingBuffer(usize).initCapacity(allocator, @intCast(data_list.items.len));
+    defer ring_buffer_enqueueMany.deinit(allocator);
 
-    ring_buffer_dequeue = try RingBuffer(usize).init(allocator, @intCast(data_list.items.len));
-    defer ring_buffer_dequeue.deinit();
+    ring_buffer_dequeue = try RingBuffer(usize).initCapacity(allocator, @intCast(data_list.items.len));
+    defer ring_buffer_dequeue.deinit(allocator);
 
-    ring_buffer_dequeueMany = try RingBuffer(usize).init(allocator, @intCast(data_list.items.len));
-    defer ring_buffer_dequeueMany.deinit();
+    ring_buffer_dequeueMany = try RingBuffer(usize).initCapacity(allocator, @intCast(data_list.items.len));
+    defer ring_buffer_dequeueMany.deinit(allocator);
 
-    ring_buffer_concatenate = try RingBuffer(usize).init(allocator, @intCast(data_list.items.len));
-    defer ring_buffer_concatenate.deinit();
+    ring_buffer_concatenate = try RingBuffer(usize).initCapacity(allocator, @intCast(data_list.items.len));
+    defer ring_buffer_concatenate.deinit(allocator);
 
-    ring_buffer_concatenate_other = try RingBuffer(usize).init(allocator, @intCast(data_list.items.len));
-    defer ring_buffer_concatenate_other.deinit();
+    ring_buffer_concatenate_other = try RingBuffer(usize).initCapacity(allocator, @intCast(data_list.items.len));
+    defer ring_buffer_concatenate_other.deinit(allocator);
 
-    ring_buffer_copy = try RingBuffer(usize).init(allocator, @intCast(data_list.items.len));
-    defer ring_buffer_copy.deinit();
+    ring_buffer_copy = try RingBuffer(usize).initCapacity(allocator, @intCast(data_list.items.len));
+    defer ring_buffer_copy.deinit(allocator);
 
-    ring_buffer_copy_other = try RingBuffer(usize).init(allocator, @intCast(data_list.items.len));
-    defer ring_buffer_copy_other.deinit();
+    ring_buffer_copy_other = try RingBuffer(usize).initCapacity(allocator, @intCast(data_list.items.len));
+    defer ring_buffer_copy_other.deinit(allocator);
 
-    ring_buffer_sort = try RingBuffer(usize).init(allocator, @intCast(data_list.items.len));
-    defer ring_buffer_sort.deinit();
+    ring_buffer_sort = try RingBuffer(usize).initCapacity(allocator, @intCast(data_list.items.len));
+    defer ring_buffer_sort.deinit(allocator);
 
     while (!ring_buffer_sort.isFull()) {
         const random_int = std.crypto.random.int(usize);
-        try ring_buffer_sort.enqueue(random_int);
+        try ring_buffer_sort.enqueue(allocator, random_int);
     }
 
     const ring_buffer_prepend_title = try std.fmt.allocPrint(

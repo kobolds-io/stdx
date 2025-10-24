@@ -45,8 +45,8 @@ const AsyncCalculator = struct {
         const requests = try allocator.create(RingBuffer(Request));
         errdefer allocator.destroy(requests);
 
-        requests.* = try RingBuffer(Request).init(allocator, ITERATIONS);
-        errdefer requests.deinit();
+        requests.* = try RingBuffer(Request).initCapacity(allocator, ITERATIONS);
+        errdefer requests.deinit(allocator);
 
         return Self{
             .close_channel = UnbufferedChannel(bool).new(),
@@ -59,7 +59,7 @@ const AsyncCalculator = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.requests.deinit();
+        self.requests.deinit(self.allocator);
         self.allocator.destroy(self.requests);
     }
 
@@ -177,7 +177,7 @@ pub fn main() !void {
 
             try requests.append(req);
 
-            try calculator.requests.enqueue(req);
+            try calculator.requests.enqueue(allocator, req);
         }
     }
 

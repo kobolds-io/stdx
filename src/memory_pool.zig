@@ -48,8 +48,8 @@ pub fn MemoryPool(comptime T: type) type {
         mutex: std.Thread.Mutex,
 
         pub fn init(allocator: std.mem.Allocator, capacity: usize) !Self {
-            var free_queue = try RingBuffer(*T).init(allocator, capacity);
-            errdefer free_queue.deinit();
+            var free_queue = try RingBuffer(*T).initCapacity(allocator, capacity);
+            errdefer free_queue.deinit(allocator);
 
             var backing_buffer = try std.ArrayList(T).initCapacity(allocator, capacity);
             errdefer backing_buffer.deinit(allocator);
@@ -63,7 +63,7 @@ pub fn MemoryPool(comptime T: type) type {
             }
 
             for (backing_buffer.items) |*v| {
-                try free_queue.enqueue(v);
+                free_queue.enqueueAssumeCapacity(v);
             }
 
             // if the backing buffer does not match the free queue, this means that the memory pool
@@ -82,7 +82,7 @@ pub fn MemoryPool(comptime T: type) type {
         }
 
         pub fn deinit(self: *Self) void {
-            self.free_list.deinit();
+            self.free_list.deinit(self.allocator);
             self.assigned_map.deinit();
             self.backing_buffer.deinit(self.allocator);
         }
@@ -181,7 +181,7 @@ pub fn MemoryPool(comptime T: type) type {
                 unreachable;
             }
 
-            self.free_list.enqueue(ptr) catch @panic("could not enqueue");
+            self.free_list.enqueueAssumeCapacity(ptr);
         }
     };
 }
