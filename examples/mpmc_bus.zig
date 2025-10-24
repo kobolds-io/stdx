@@ -68,8 +68,8 @@ pub fn Bus(comptime T: type) type {
             const queue = try allocator.create(RingBuffer(T));
             errdefer allocator.destroy(queue);
 
-            queue.* = try RingBuffer(T).init(allocator, BUS_QUEUE_SIZE);
-            errdefer queue.deinit();
+            queue.* = try RingBuffer(T).initCapacity(allocator, BUS_QUEUE_SIZE);
+            errdefer queue.deinit(allocator);
 
             const consumers = try allocator.create(std.array_list.Managed(*Consumer(T)));
             errdefer allocator.destroy(consumers);
@@ -95,7 +95,7 @@ pub fn Bus(comptime T: type) type {
         }
 
         pub fn deinit(self: *Self) void {
-            self.queue.deinit();
+            self.queue.deinit(self.allocator);
             self.consumers.deinit();
             self.producers.deinit();
 
@@ -211,8 +211,8 @@ pub fn Consumer(comptime T: type) type {
             const queue = try allocator.create(RingBuffer(T));
             errdefer allocator.destroy(queue);
 
-            queue.* = try RingBuffer(T).init(allocator, CONSUMER_QUEUE_SIZE);
-            errdefer queue.deinit();
+            queue.* = try RingBuffer(T).initCapacity(allocator, CONSUMER_QUEUE_SIZE);
+            errdefer queue.deinit(allocator);
 
             return Self{
                 .allocator = allocator,
@@ -226,7 +226,7 @@ pub fn Consumer(comptime T: type) type {
         }
 
         pub fn deinit(self: *Self) void {
-            self.queue.deinit();
+            self.queue.deinit(self.allocator);
 
             self.allocator.destroy(self.queue);
         }
@@ -278,8 +278,8 @@ pub fn Producer(comptime T: type) type {
             const queue = try allocator.create(RingBuffer(T));
             errdefer allocator.destroy(queue);
 
-            queue.* = try RingBuffer(T).init(allocator, PRODUCER_QUEUE_SIZE);
-            errdefer queue.deinit();
+            queue.* = try RingBuffer(T).initCapacity(allocator, PRODUCER_QUEUE_SIZE);
+            errdefer queue.deinit(allocator);
 
             return Self{
                 .allocator = allocator,
@@ -292,7 +292,7 @@ pub fn Producer(comptime T: type) type {
         }
 
         pub fn deinit(self: *Self) void {
-            self.queue.deinit();
+            self.queue.deinit(self.allocator);
             self.allocator.destroy(self.queue);
         }
 
@@ -300,7 +300,7 @@ pub fn Producer(comptime T: type) type {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            try self.queue.enqueue(value);
+            try self.queue.enqueue(self.allocator, value);
 
             self.produced_count += 1;
         }

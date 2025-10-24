@@ -10,7 +10,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     // Create a basic ring buffer
-    var ring_buffer = try RingBuffer(u64).init(allocator, 100);
+    var ring_buffer = try RingBuffer(u64).initCapacity(allocator, 100);
     defer ring_buffer.deinit(allocator);
 
     // Enqueue a single item
@@ -21,9 +21,7 @@ pub fn main() !void {
 
     // Enqueue many items
     const values: [3]u64 = [_]u64{9999} ** 3;
-    const enqueued_count = ring_buffer.enqueueMany(&values);
-
-    assert(enqueued_count == values.len);
+    try ring_buffer.enqueueSlice(allocator, &values);
 
     // fill the remaining capacity of the ring buffer
     ring_buffer.fill(4321);
@@ -53,7 +51,7 @@ pub fn main() !void {
     assert(ring_buffer.count > 0);
 
     // prepend an item
-    try ring_buffer.prepend(new_head_value);
+    try ring_buffer.prepend(allocator, new_head_value);
 
     // dequeue the head item
     assert(new_head_value == ring_buffer.dequeue().?);

@@ -77,7 +77,7 @@ const UploadManager = struct {
         }
 
         self.uploaders.deinit();
-        self.uploader_events.deinit();
+        self.uploader_events.deinit(self.allocator);
     }
 
     pub fn run(self: *UploadManager, worker_count: usize, timeout: i64) !void {
@@ -154,7 +154,7 @@ pub fn main() !void {
 
     // initialize a channel of usizes with a capacity of 10 items
     var channel = try BufferedChannel(usize).init(allocator, 10);
-    defer channel.deinit();
+    defer channel.deinit(allocator);
 
     // put a single item into the channel. This will not block because
     // the channel.buffer is not full
