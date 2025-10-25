@@ -5,10 +5,6 @@ const log = std.log.scoped(.Pool);
 
 const RingBuffer = @import("./ring_buffer.zig").RingBuffer;
 
-const Error = error{
-    OutOfMemory,
-};
-
 /// A `MemoryPool` is a structure used to manage dynamic memory allocation.
 /// It is a pre-allocated region of memory that is divided into fixed-size
 /// blocks, which can be allocated and deallocated more efficiently than
@@ -123,7 +119,7 @@ pub fn MemoryPool(comptime T: type) type {
 
         /// Non thread safe version of `create`
         pub fn unsafeCreate(self: *Self) !*T {
-            if (self.availableUnsafe() == 0) return Error.OutOfMemory;
+            if (self.availableUnsafe() == 0) return error.OutOfMemory;
 
             if (self.free_list.dequeue()) |ptr| {
                 try self.assigned_map.put(ptr, true);
@@ -146,7 +142,7 @@ pub fn MemoryPool(comptime T: type) type {
 
         /// Unsafe version of `createN`.
         pub fn unsafeCreateN(self: *Self, allocator: std.mem.Allocator, n: usize) ![]*T {
-            if (self.availableUnsafe() < n) return Error.OutOfMemory;
+            if (self.availableUnsafe() < n) return error.OutOfMemory;
 
             var list = try std.ArrayList(*T).initCapacity(allocator, n);
             errdefer list.deinit(allocator);
@@ -216,7 +212,7 @@ test "create and destroy" {
     }
 
     try testing.expectEqual(0, memory_pool_create.available());
-    try testing.expectError(Error.OutOfMemory, memory_pool_create.create());
+    try testing.expectError(error.OutOfMemory, memory_pool_create.create());
 
     // remove one of the created items
     const removed_ptr = ptrs.pop().?;
