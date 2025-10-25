@@ -2,7 +2,7 @@
 
 Thank you for contributing to the project! The fact that you're even reading this means that you're awesome!
 
-# Table of Contents
+## Table of Contents
 
 1. [Contributing](#contributing)
    1. [Overview](#overview)
@@ -33,9 +33,7 @@ Contributions can be made through GitHub pull requests. All code changes are rev
 
 ## Pull Requests
 
-We actively welcome your pull requests. If you are planning on doing a larger
-chunk of work or want to change the API, make sure to file an
-issue first to get feedback on your idea.
+We actively welcome your pull requests. If you are planning on doing a larger chunk of work or want to change the API, make sure to file an issue first to get feedback on your idea.
 
 1. Fork the repo and create your branch from `main`.
 2. name your branch relative to what you're contributing. These make it really easy to see what you're trying to do.
