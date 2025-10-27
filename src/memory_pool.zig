@@ -21,7 +21,7 @@ pub fn MemoryPool(comptime T: type) type {
         ///
         /// The map ensures that the pool does not mistakenly return or reuse memory blocks
         /// that are still in use, helping to track the current state of the pool's memory blocks.
-        assigned_map: std.AutoHashMap(*T, bool),
+        assigned_map: std.AutoHashMapUnmanaged(*T, bool),
 
         /// A list that holds the memory blocks allocated by the pool.
         ///
@@ -69,7 +69,7 @@ pub fn MemoryPool(comptime T: type) type {
 
             return Self{
                 .allocator = allocator,
-                .assigned_map = std.AutoHashMap(*T, bool).init(allocator),
+                .assigned_map = .empty,
                 .capacity = capacity,
                 .free_list = free_queue,
                 .backing_buffer = backing_buffer,
@@ -79,7 +79,7 @@ pub fn MemoryPool(comptime T: type) type {
 
         pub fn deinit(self: *Self) void {
             self.free_list.deinit(self.allocator);
-            self.assigned_map.deinit();
+            self.assigned_map.deinit(self.allocator);
             self.backing_buffer.deinit(self.allocator);
         }
 
@@ -125,7 +125,7 @@ pub fn MemoryPool(comptime T: type) type {
             if (self.availableUnsafe() == 0) return error.OutOfMemory;
 
             if (self.free_list.dequeue()) |ptr| {
-                try self.assigned_map.put(ptr, true);
+                try self.assigned_map.put(self.allocator, ptr, true);
 
                 return ptr;
             } else unreachable;
@@ -153,7 +153,7 @@ pub fn MemoryPool(comptime T: type) type {
             for (0..n) |_| {
                 if (self.free_list.dequeue()) |ptr| {
                     try list.append(allocator, ptr);
-                    try self.assigned_map.put(ptr, true);
+                    try self.assigned_map.put(self.allocator, ptr, true);
                 } else break;
             }
 
