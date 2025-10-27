@@ -85,6 +85,9 @@ pub fn MemoryPool(comptime T: type) type {
 
         /// return the number assigned ptrs in the memory pool.
         pub fn count(self: *Self) usize {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+
             return self.countUnsafe();
         }
 
