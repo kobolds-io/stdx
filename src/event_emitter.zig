@@ -61,6 +61,7 @@ pub fn EventEmitter(
             if (self.listeners.get(event)) |listener_list| {
                 for (listener_list.items, 0..listener_list.items.len) |listener, i| {
                     if (listener.callback == callback and listener.context == context) {
+                        // TODO: figure out if this is a memory leak??
                         _ = listener_list.swapRemove(i);
                         return true;
                     }
