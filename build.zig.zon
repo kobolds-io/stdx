@@ -1,6 +1,6 @@
 .{
     .name = .stdx,
-    .version = "0.0.12",
+    .version = "0.2.0",
     .fingerprint = 0x5479474f01cd229f, // Changing this has security and trust implications.
     .minimum_zig_version = "0.15.1",
     .dependencies = .{
