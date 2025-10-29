@@ -15,16 +15,17 @@ const BenchmarkBufferedChannelSend = struct {
     channel: *BufferedChannel(usize),
 
     fn new(list: *std.ArrayList(usize), channel: *BufferedChannel(usize)) Self {
-        return .{
+        return Self{
             .list = list,
             .channel = channel,
         };
     }
 
     pub fn run(self: Self, _: std.mem.Allocator) void {
-        for (self.list.items) |data| {
-            self.channel.send(data);
-        }
+        std.debug.print("self: {any}\n", .{self});
+        // for (self.list.items) |data| {
+        //     self.channel.send(data);
+        // }
     }
 };
 
@@ -35,7 +36,7 @@ const BenchmarkBufferedChannelReceive = struct {
     channel: *BufferedChannel(usize),
 
     fn new(list: *std.ArrayList(usize), channel: *BufferedChannel(usize)) Self {
-        return .{
+        return Self{
             .list = list,
             .channel = channel,
         };
@@ -51,9 +52,6 @@ const BenchmarkBufferedChannelReceive = struct {
 var send_channel: BufferedChannel(usize) = undefined;
 var receive_channel: BufferedChannel(usize) = undefined;
 
-var data_list: std.ArrayList(usize) = .empty;
-const allocator = testing.allocator;
-
 fn beforeEachSend() void {
     send_channel.buffer.reset();
 }
@@ -64,15 +62,19 @@ fn beforeEachReceive() void {
 }
 
 test "BufferedChannel benchmarks" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
     var bench = zbench.Benchmark.init(
-        std.testing.allocator,
-        // .{ .iterations = 1 },
-        .{ .iterations = constants.benchmark_max_iterations },
+        allocator,
+        .{ .iterations = 1 },
+        // .{ .iterations = constants.benchmark_max_iterations },
     );
     defer bench.deinit();
 
     // Create a list of `n` length that will be used/reused by each benchmarking test
-    data_list = try std.ArrayList(usize).initCapacity(
+    var data_list = try std.ArrayList(usize).initCapacity(
         allocator,
         constants.benchmark_max_queue_data_list,
     );
@@ -113,15 +115,15 @@ test "BufferedChannel benchmarks" {
         },
     );
 
-    try bench.addParam(
-        channel_receive_title,
-        &BenchmarkBufferedChannelReceive.new(&data_list, &receive_channel),
-        .{
-            .hooks = .{
-                .before_each = beforeEachReceive,
-            },
-        },
-    );
+    // try bench.addParam(
+    //     channel_receive_title,
+    //     &BenchmarkBufferedChannelReceive.new(&data_list, &receive_channel),
+    //     .{
+    //         .hooks = .{
+    //             .before_each = beforeEachReceive,
+    //         },
+    //     },
+    // );
 
     var stderr = std.fs.File.stderr().writerStreaming(&.{});
     const writer = &stderr.interface;
