@@ -24,24 +24,24 @@ pub fn ManagedQueue(comptime T: type) type {
             }
         };
 
-        allocator: std.mem.Allocator,
         head: ?*Node,
         tail: ?*Node,
         count: usize,
 
-        pub fn init(allocator: std.mem.Allocator) Self {
-            return Self{
-                .allocator = allocator,
-                .head = null,
-                .tail = null,
-                .count = 0,
-            };
+        pub fn new() Self {
+            return Self.empty;
         }
 
-        pub fn deinit(self: *Self) void {
+        pub const empty = Self{
+            .count = 0,
+            .head = null,
+            .tail = null,
+        };
+
+        pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
             // deallocate all items in the queue
             while (self.dequeueNode()) |node| {
-                self.allocator.destroy(node);
+                allocator.destroy(node);
             }
 
             // Ensure that the queue is fully deinitialized
@@ -73,10 +73,10 @@ pub fn ManagedQueue(comptime T: type) type {
         /// Adds a new element to the end of the queue. A new Node is created with the
         /// provided data and added to the end of the queue. The count is incremented
         /// after adding the element.
-        pub fn enqueue(self: *Self, data: T) !void {
+        pub fn enqueue(self: *Self, allocator: std.mem.Allocator, data: T) !void {
             // create a new node
-            const node = try self.allocator.create(Node);
-            errdefer self.allocator.destroy(node);
+            const node = try allocator.create(Node);
+            errdefer allocator.destroy(node);
 
             node.* = Node{
                 .data = data,
@@ -105,7 +105,7 @@ pub fn ManagedQueue(comptime T: type) type {
         /// Dequeue a single item from the `head` position of the managed queue. If the
         /// managed queue is empty `dequeue` returns null. Every dequeued item decrements
         /// the managed queue `count`.
-        pub fn dequeue(self: *Self) ?T {
+        pub fn dequeue(self: *Self, allocator: std.mem.Allocator) ?T {
             if (self.isEmpty()) return null;
 
             // we know that there is at least one item in the queue
@@ -126,7 +126,7 @@ pub fn ManagedQueue(comptime T: type) type {
             self.count -= 1;
 
             // deallocate the node
-            self.allocator.destroy(n);
+            allocator.destroy(n);
 
             return data;
         }
@@ -158,11 +158,6 @@ pub fn ManagedQueue(comptime T: type) type {
         /// **Note** This version of concatentate assumes that this and the other queue share the
         /// same allocator.
         pub fn concatenate(self: *Self, other: *Self) void {
-            // we should just panic if this isn't the case
-            if (self.allocator.ptr != other.allocator.ptr) {
-                @panic("Cannot concatenate queues with different allocators");
-            }
-
             if (other.isEmpty()) return; // No need to do anything if the other queue is empty
 
             if (self.isEmpty()) {
@@ -189,16 +184,16 @@ pub fn ManagedQueue(comptime T: type) type {
 test "enqueue/dequeue" {
     const allocator = testing.allocator;
 
-    var q = ManagedQueue(u8).init(allocator);
-    defer q.deinit();
+    var q: ManagedQueue(u8) = .empty;
+    defer q.deinit(allocator);
 
-    try q.enqueue(1);
-    try q.enqueue(2);
-    try q.enqueue(3);
+    try q.enqueue(allocator, 1);
+    try q.enqueue(allocator, 2);
+    try q.enqueue(allocator, 3);
 
     try testing.expectEqual(3, q.count);
 
-    while (q.dequeue()) |_| {}
+    while (q.dequeue(allocator)) |_| {}
 
     try testing.expectEqual(0, q.count);
 }
@@ -206,23 +201,23 @@ test "enqueue/dequeue" {
 test "concatenating two queues" {
     const allocator = testing.allocator;
 
-    var q1 = ManagedQueue(u8).init(allocator);
-    defer q1.deinit();
+    var q1: ManagedQueue(u8) = .empty;
+    defer q1.deinit(allocator);
 
-    var q2 = ManagedQueue(u8).init(allocator);
-    defer q2.deinit();
+    var q2: ManagedQueue(u8) = .empty;
+    defer q2.deinit(allocator);
 
-    try q1.enqueue(1);
-    try q1.enqueue(2);
-    try q1.enqueue(3);
-    try q1.enqueue(4);
-    try q1.enqueue(5);
+    try q1.enqueue(allocator, 1);
+    try q1.enqueue(allocator, 2);
+    try q1.enqueue(allocator, 3);
+    try q1.enqueue(allocator, 4);
+    try q1.enqueue(allocator, 5);
 
-    try q2.enqueue(6);
-    try q2.enqueue(7);
-    try q2.enqueue(8);
-    try q2.enqueue(9);
-    try q2.enqueue(10);
+    try q2.enqueue(allocator, 6);
+    try q2.enqueue(allocator, 7);
+    try q2.enqueue(allocator, 8);
+    try q2.enqueue(allocator, 9);
+    try q2.enqueue(allocator, 10);
 
     try testing.expectEqual(5, q1.count);
     try testing.expectEqual(5, q2.count);
@@ -234,7 +229,7 @@ test "concatenating two queues" {
 
     // loop over each item in the queue and verify that everything was added in order
     var i: u8 = 1;
-    while (q1.dequeue()) |d| : (i += 1) {
+    while (q1.dequeue(allocator)) |d| : (i += 1) {
         try testing.expectEqual(i, d);
     }
 

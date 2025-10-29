@@ -17,50 +17,62 @@ pub fn EventEmitter(
             callback: ListenerCallback,
         };
 
-        allocator: std.mem.Allocator,
-        listeners: std.AutoHashMap(Event, *std.ArrayList(Listener)),
+        listeners: std.AutoHashMapUnmanaged(Event, *std.ArrayList(Listener)),
 
-        pub fn init(allocator: std.mem.Allocator) Self {
-            return Self{
-                .allocator = allocator,
-                .listeners = std.AutoHashMap(Event, *std.ArrayList(Listener)).init(allocator),
-            };
+        pub fn new() Self {
+            return Self.empty;
         }
 
-        pub fn deinit(self: *Self) void {
+        pub const empty = Self{
+            .listeners = .empty,
+        };
+
+        pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
             var listeners_iter = self.listeners.valueIterator();
             while (listeners_iter.next()) |listener_list_ptr| {
                 const listener_list = listener_list_ptr.*;
 
                 // deinit and destroy the list
-                listener_list.deinit(self.allocator);
-                self.allocator.destroy(listener_list);
+                listener_list.deinit(allocator);
+                allocator.destroy(listener_list);
             }
 
-            self.listeners.deinit();
+            self.listeners.deinit(allocator);
         }
 
-        pub fn addEventListener(self: *Self, context: Context, event: Event, callback: ListenerCallback) !void {
+        pub fn addEventListener(
+            self: *Self,
+            allocator: std.mem.Allocator,
+            context: Context,
+            event: Event,
+            callback: ListenerCallback,
+        ) !void {
             if (self.listeners.get(event)) |listeners_list| {
-                try listeners_list.append(self.allocator, .{ .context = context, .callback = callback });
+                try listeners_list.append(allocator, .{ .context = context, .callback = callback });
             } else {
                 // create a new list
-                const listener_list = try self.allocator.create(std.ArrayList(Listener));
-                errdefer self.allocator.destroy(listener_list);
+                const listener_list = try allocator.create(std.ArrayList(Listener));
+                errdefer allocator.destroy(listener_list);
 
-                listener_list.* = try std.ArrayList(Listener).initCapacity(self.allocator, 1);
-                errdefer listener_list.deinit(self.allocator);
+                listener_list.* = try std.ArrayList(Listener).initCapacity(allocator, 1);
+                errdefer listener_list.deinit(allocator);
 
                 listener_list.appendAssumeCapacity(.{ .context = context, .callback = callback });
 
-                try self.listeners.put(event, listener_list);
+                try self.listeners.put(allocator, event, listener_list);
             }
         }
 
-        pub fn removeEventListener(self: *Self, context: Context, event: Event, callback: ListenerCallback) bool {
+        pub fn removeEventListener(
+            self: *Self,
+            context: Context,
+            event: Event,
+            callback: ListenerCallback,
+        ) bool {
             if (self.listeners.get(event)) |listener_list| {
                 for (listener_list.items, 0..listener_list.items.len) |listener, i| {
                     if (listener.callback == callback and listener.context == context) {
+                        // TODO: figure out if this is a memory leak??
                         _ = listener_list.swapRemove(i);
                         return true;
                     }
@@ -99,21 +111,21 @@ const TestContext = struct {
 test "init/deinit" {
     const allocator = testing.allocator;
 
-    var ee = EventEmitter(TestEvent, *TestContext, u32).init(allocator);
-    defer ee.deinit();
+    var ee: EventEmitter(TestEvent, *TestContext, u32) = .empty;
+    defer ee.deinit(allocator);
 }
 
 test "basic emit" {
     const allocator = testing.allocator;
 
-    var ee = EventEmitter(TestEvent, *TestContext, u32).init(allocator);
-    defer ee.deinit();
+    var ee: EventEmitter(TestEvent, *TestContext, u32) = .empty;
+    defer ee.deinit(allocator);
 
     var test_context = TestContext{
         .data = 0,
     };
 
-    try ee.addEventListener(&test_context, .data_sent, TestContext.onDataSent);
+    try ee.addEventListener(allocator, &test_context, .data_sent, TestContext.onDataSent);
     defer _ = ee.removeEventListener(&test_context, .data_sent, TestContext.onDataSent);
 
     const want: u32 = 100;
