@@ -10,18 +10,17 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     // initialize a managed queue of i32s
-    var managed_queue = ManagedQueue(i32).init(allocator);
-
-    defer managed_queue.deinit();
+    var managed_queue = ManagedQueue(i32).new();
+    defer managed_queue.deinit(allocator);
 
     // enqueue an item into the queue
-    try managed_queue.enqueue(123);
+    try managed_queue.enqueue(allocator, 123);
 
     // ensure that there is only 1 item in the queue
     assert(managed_queue.count == 1);
 
     // dequeue an item from the queue
-    const dequeued_item = managed_queue.dequeue().?;
+    const dequeued_item = managed_queue.dequeue(allocator).?;
 
     // ensure that the dequeued item was actually the same item enqueued
     assert(dequeued_item == 123);
@@ -29,5 +28,5 @@ pub fn main() !void {
     assert(managed_queue.isEmpty());
 
     // trying to dequeue another item from the queue results in null
-    assert(managed_queue.dequeue() == null);
+    assert(managed_queue.dequeue(allocator) == null);
 }

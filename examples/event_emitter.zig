@@ -47,16 +47,16 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var calculator_ee = EventEmitter(Operation, *Calculator, i128).init(allocator);
-    defer calculator_ee.deinit();
+    var calculator_ee = EventEmitter(Operation, *Calculator, i128).new();
+    defer calculator_ee.deinit(allocator);
 
     var calculator = Calculator{};
 
-    try calculator_ee.addEventListener(&calculator, .add, Calculator.onAdd);
-    try calculator_ee.addEventListener(&calculator, .subtract, Calculator.onSubtract);
-    try calculator_ee.addEventListener(&calculator, .multiply, Calculator.onMultiply);
-    try calculator_ee.addEventListener(&calculator, .divide, Calculator.onDivide);
-    try calculator_ee.addEventListener(&calculator, .set, Calculator.onSetLHS);
+    try calculator_ee.addEventListener(allocator, &calculator, .add, Calculator.onAdd);
+    try calculator_ee.addEventListener(allocator, &calculator, .subtract, Calculator.onSubtract);
+    try calculator_ee.addEventListener(allocator, &calculator, .multiply, Calculator.onMultiply);
+    try calculator_ee.addEventListener(allocator, &calculator, .divide, Calculator.onDivide);
+    try calculator_ee.addEventListener(allocator, &calculator, .set, Calculator.onSetLHS);
 
     calculator_ee.emit(.set, 10);
     assert(calculator.result == 10);
