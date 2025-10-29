@@ -22,10 +22,10 @@ const BenchmarkBufferedChannelSend = struct {
     }
 
     pub fn run(self: Self, _: std.mem.Allocator) void {
-        std.debug.print("self: {any}\n", .{self});
-        // for (self.list.items) |data| {
-        //     self.channel.send(data);
-        // }
+        // std.debug.print("self: {any}\n", .{self});
+        for (self.list.items) |data| {
+            self.channel.send(data);
+        }
     }
 };
 
@@ -68,8 +68,8 @@ test "BufferedChannel benchmarks" {
 
     var bench = zbench.Benchmark.init(
         allocator,
-        .{ .iterations = 1 },
-        // .{ .iterations = constants.benchmark_max_iterations },
+        // .{ .iterations = 1 },
+        .{ .iterations = constants.benchmark_max_iterations },
     );
     defer bench.deinit();
 
