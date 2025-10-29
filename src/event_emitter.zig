@@ -40,7 +40,13 @@ pub fn EventEmitter(
             self.listeners.deinit(allocator);
         }
 
-        pub fn addEventListener(self: *Self, allocator: std.mem.Allocator, context: Context, event: Event, callback: ListenerCallback) !void {
+        pub fn addEventListener(
+            self: *Self,
+            allocator: std.mem.Allocator,
+            context: Context,
+            event: Event,
+            callback: ListenerCallback,
+        ) !void {
             if (self.listeners.get(event)) |listeners_list| {
                 try listeners_list.append(allocator, .{ .context = context, .callback = callback });
             } else {
@@ -57,7 +63,12 @@ pub fn EventEmitter(
             }
         }
 
-        pub fn removeEventListener(self: *Self, context: Context, event: Event, callback: ListenerCallback) bool {
+        pub fn removeEventListener(
+            self: *Self,
+            context: Context,
+            event: Event,
+            callback: ListenerCallback,
+        ) bool {
             if (self.listeners.get(event)) |listener_list| {
                 for (listener_list.items, 0..listener_list.items.len) |listener, i| {
                     if (listener.callback == callback and listener.context == context) {
