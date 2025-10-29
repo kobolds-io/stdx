@@ -68,7 +68,6 @@ test "BufferedChannel benchmarks" {
 
     var bench = zbench.Benchmark.init(
         allocator,
-        // .{ .iterations = 1 },
         .{ .iterations = constants.benchmark_max_iterations },
     );
     defer bench.deinit();
