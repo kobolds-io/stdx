@@ -1,6 +1,6 @@
 # Overview
 
-**CAUTION** this project is current in development and should be used at your own risk. Until there is a stable tagged release, be careful.
+> **CAUTION** this project has been archived. Please see https://codeberg.org/kobolds-io/stdx.
 
 This is a library adding several generally useful tools that are either not included in the standard library or have slightly different behavior. As the `zig` programming language matures, we should get more and more awesome `std` library features but until then...
 
