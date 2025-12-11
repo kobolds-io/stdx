@@ -290,6 +290,122 @@ pub fn AdaptiveRadixTree(comptime K: type, comptime V: type) type {
                 },
             }
         }
+
+        pub fn prettyPrint(self: *Self, allocator: std.mem.Allocator) !void {
+            if (self.root) |r| {
+                try Self.printNodePretty(r, allocator, "", true);
+            } else {
+                std.debug.print("(empty ART)\n", .{});
+            }
+        }
+
+        fn printNodePretty(node: *Node, allocator: std.mem.Allocator, prefix: []const u8, is_last: bool) !void {
+            const branch = if (is_last) "└── " else "├── ";
+            const child_prefix = if (is_last) "    " else "│   ";
+
+            // print current node
+            std.debug.print("{s}{s}", .{ prefix, branch });
+
+            switch (node.*) {
+                .leaf => |leaf| {
+                    std.debug.print("Leaf(key={any}, value={any})\n", .{ leaf.key, leaf.value });
+                },
+
+                .node_4 => |n| {
+                    std.debug.print("Node4(prefix_len={}, children={})\n", .{ n.prefix_len, n.num_children });
+
+                    // allocate prefix extension
+                    const next_prefix = try std.fmt.allocPrint(allocator, "{s}{s}", .{
+                        prefix,
+                        child_prefix,
+                    });
+                    defer allocator.free(next_prefix); // ← FREE IT
+
+                    var i: usize = 0;
+                    while (i < n.num_children) : (i += 1) {
+                        const last_child = (i + 1 == n.num_children);
+
+                        std.debug.print("{s}{s}{x}\n", .{ next_prefix, if (last_child) "└── key " else "├── key ", n.keys[i] });
+
+                        if (n.children[i]) |c| {
+                            try printNodePretty(c, allocator, next_prefix, last_child);
+                        }
+                    }
+                },
+
+                .node_16 => |n| {
+                    std.debug.print("Node16(prefix_len={}, children={})\n", .{ n.prefix_len, n.num_children });
+
+                    const next_prefix = try std.fmt.allocPrint(allocator, "{s}{s}", .{
+                        prefix,
+                        child_prefix,
+                    });
+                    defer allocator.free(next_prefix);
+
+                    var i: usize = 0;
+                    while (i < n.num_children) : (i += 1) {
+                        const last_child = (i + 1 == n.num_children);
+
+                        std.debug.print("{s}{s}{x}\n", .{ next_prefix, if (last_child) "└── key " else "├── key ", n.keys[i] });
+
+                        if (n.children[i]) |c| {
+                            try printNodePretty(c, allocator, next_prefix, last_child);
+                        }
+                    }
+                },
+
+                .node_48 => |n| {
+                    std.debug.print("Node48(prefix_len={}, children={})\n", .{ n.prefix_len, n.num_children });
+
+                    const next_prefix = try std.fmt.allocPrint(allocator, "{s}{s}", .{
+                        prefix,
+                        child_prefix,
+                    });
+                    defer allocator.free(next_prefix);
+
+                    var count: usize = 0;
+                    var b: usize = 0;
+                    while (b < 256) : (b += 1) {
+                        if (n.keys[b] != 0) {
+                            const last_child = (count + 1 == n.num_children);
+                            const child_index = @as(usize, n.keys[b]) - 1;
+
+                            std.debug.print("{s}{s}{x}\n", .{ next_prefix, if (last_child) "└── key " else "├── key ", b });
+
+                            if (n.children[child_index]) |c| {
+                                try printNodePretty(c, allocator, next_prefix, last_child);
+                            }
+
+                            count += 1;
+                        }
+                    }
+                },
+
+                .node_256 => |n| {
+                    std.debug.print("Node256(prefix_len={}, children={})\n", .{ n.prefix_len, n.num_children });
+
+                    const next_prefix = try std.fmt.allocPrint(allocator, "{s}{s}", .{
+                        prefix,
+                        child_prefix,
+                    });
+                    defer allocator.free(next_prefix);
+
+                    var count: usize = 0;
+                    var b: usize = 0;
+                    while (b < 256) : (b += 1) {
+                        if (n.children[b]) |c| {
+                            const last_child = (count + 1 == n.num_children);
+
+                            std.debug.print("{s}{s}{x}\n", .{ next_prefix, if (last_child) "└── key " else "├── key ", b });
+
+                            try printNodePretty(c, allocator, next_prefix, last_child);
+
+                            count += 1;
+                        }
+                    }
+                },
+            }
+        }
     };
 }
 
@@ -307,26 +423,33 @@ test "inserting a value into tree" {
     defer art.deinit(allocator);
 
     const key_1 = "he";
-    const value_1 = 123;
+    const value_1 = 1;
 
     // add a first value into the tree
     try art.insert(allocator, key_1, value_1);
-
     try testing.expectEqual(1, art.size);
+
+    try art.prettyPrint(allocator);
 
     // add a new value to the tree
     const key_2 = "hel";
-    const value_2 = 123;
+    const value_2 = 12;
 
     try art.insert(allocator, key_2, value_2);
     try testing.expectEqual(2, art.size);
+
+    try art.prettyPrint(allocator);
 
     // add a new value to the tree
     const key_3 = "hell";
     const value_3 = 123;
 
+    try art.prettyPrint(allocator);
+
     try art.insert(allocator, key_3, value_3);
     try testing.expectEqual(3, art.size);
+
+    try art.prettyPrint(allocator);
 
     // add a new value to the tree
     const key_4 = "hello";
@@ -335,10 +458,23 @@ test "inserting a value into tree" {
     try art.insert(allocator, key_4, value_4);
     try testing.expectEqual(4, art.size);
 
+    try art.prettyPrint(allocator);
+
     // add a new value to the tree
     const key_5 = "hello_";
-    const value_5 = 1234;
+    const value_5 = 12345;
 
     try art.insert(allocator, key_5, value_5);
     try testing.expectEqual(5, art.size);
+
+    try art.prettyPrint(allocator);
+
+    // add a new value to the tree
+    const key_6 = "hello_w";
+    const value_6 = 123456;
+
+    try art.insert(allocator, key_6, value_6);
+    try testing.expectEqual(6, art.size);
+
+    try art.prettyPrint(allocator);
 }
