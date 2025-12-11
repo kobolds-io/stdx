@@ -422,7 +422,7 @@ test "inserting a value into tree" {
     var art = AdaptiveRadixTree([]const u8, u32).init(allocator);
     defer art.deinit(allocator);
 
-    const key_1 = "he";
+    const key_1 = "h";
     const value_1 = 1;
 
     // add a first value into the tree
@@ -432,8 +432,8 @@ test "inserting a value into tree" {
     try art.prettyPrint(allocator);
 
     // add a new value to the tree
-    const key_2 = "hel";
-    const value_2 = 12;
+    const key_2 = "he";
+    const value_2 = 2;
 
     try art.insert(allocator, key_2, value_2);
     try testing.expectEqual(2, art.size);
@@ -441,40 +441,59 @@ test "inserting a value into tree" {
     try art.prettyPrint(allocator);
 
     // add a new value to the tree
-    const key_3 = "hell";
-    const value_3 = 123;
-
-    try art.prettyPrint(allocator);
+    const key_3 = "hel";
+    const value_3 = 3;
 
     try art.insert(allocator, key_3, value_3);
     try testing.expectEqual(3, art.size);
 
-    try art.prettyPrint(allocator);
-
-    // add a new value to the tree
-    const key_4 = "hello";
-    const value_4 = 1234;
+    const key_4 = "hell";
+    const value_4 = 4;
 
     try art.insert(allocator, key_4, value_4);
     try testing.expectEqual(4, art.size);
 
-    try art.prettyPrint(allocator);
-
-    // add a new value to the tree
-    const key_5 = "hello_";
-    const value_5 = 12345;
+    const key_5 = "hello";
+    const value_5 = 5;
 
     try art.insert(allocator, key_5, value_5);
     try testing.expectEqual(5, art.size);
 
-    try art.prettyPrint(allocator);
-
-    // add a new value to the tree
-    const key_6 = "hello_w";
-    const value_6 = 123456;
+    const key_6 = "hello_";
+    const value_6 = 6;
 
     try art.insert(allocator, key_6, value_6);
     try testing.expectEqual(6, art.size);
+
+    const key_7 = "hello_w";
+    const value_7 = 7;
+
+    try art.insert(allocator, key_7, value_7);
+    try testing.expectEqual(7, art.size);
+
+    const key_8 = "hello_wo";
+    const value_8 = 8;
+
+    try art.insert(allocator, key_8, value_8);
+    try testing.expectEqual(8, art.size);
+
+    // try art.prettyPrint(allocator);
+}
+
+test "insert 100 items" {
+    const allocator = testing.allocator;
+
+    var art = AdaptiveRadixTree([]const u8, usize).init(allocator);
+    defer art.deinit(allocator);
+
+    const iters: usize = 100;
+    var keys = try std.ArrayList([]const u8).initCapacity(allocator, iters);
+    defer keys.deinit(allocator);
+
+    for (0..iters) |i| {
+        const k = try std.fmt.allocPrint(allocator, "{d}", .{i});
+        try art.insert(allocator, k, i);
+    }
 
     try art.prettyPrint(allocator);
 }
