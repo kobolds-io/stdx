@@ -5,7 +5,26 @@ pub fn AdaptiveRadixTree(comptime K: type, comptime V: type) type {
     return struct {
         const Self = @This();
 
-        const Node = struct {};
+        const NodeType = enum {
+            leaf,
+            node_4,
+            node_16,
+            node_48,
+            node_256,
+        };
+
+        const Node = union(NodeType) {
+            leaf: LeafNode,
+            node_4: Node4,
+            node_16: Node16,
+            node_48: Node48,
+            node_256: Node256,
+        };
+
+        const LeafNode = struct {
+            key: K,
+            value: V,
+        };
 
         root: ?*Node = null,
         size: usize = 0,
