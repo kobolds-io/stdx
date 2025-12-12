@@ -66,8 +66,7 @@ pub fn AdaptiveRadixTree(comptime K: type, comptime V: type) type {
         root: ?*Node = null,
         size: usize = 0,
 
-        pub fn init(allocator: std.mem.Allocator) Self {
-            _ = allocator;
+        pub fn init(_: std.mem.Allocator) Self {
             return Self{
                 .size = 0,
                 .root = null,
