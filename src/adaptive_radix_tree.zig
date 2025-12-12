@@ -16,14 +16,14 @@ pub fn AdaptiveRadixTree(comptime K: type, comptime V: type) type {
         };
 
         const Node = union(NodeType) {
-            leaf: LeafNode,
+            leaf: Leaf,
             node_4: Node4,
             node_16: Node16,
             node_48: Node48,
             node_256: Node256,
         };
 
-        const LeafNode = struct {
+        const Leaf = struct {
             key: K,
             value: V,
         };
