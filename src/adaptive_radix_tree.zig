@@ -16,14 +16,14 @@ pub fn AdaptiveRadixTree(comptime K: type, comptime V: type) type {
         };
 
         const Node = union(NodeType) {
-            leaf: LeafNode,
+            leaf: Leaf,
             node_4: Node4,
             node_16: Node16,
             node_48: Node48,
             node_256: Node256,
         };
 
-        const LeafNode = struct {
+        const Leaf = struct {
             key: K,
             value: V,
         };
@@ -66,8 +66,7 @@ pub fn AdaptiveRadixTree(comptime K: type, comptime V: type) type {
         root: ?*Node = null,
         size: usize = 0,
 
-        pub fn init(allocator: std.mem.Allocator) Self {
-            _ = allocator;
+        pub fn init(_: std.mem.Allocator) Self {
             return Self{
                 .size = 0,
                 .root = null,
@@ -282,10 +281,11 @@ pub fn AdaptiveRadixTree(comptime K: type, comptime V: type) type {
                 .node_16 => |n16| {
                     const b: u8 = key[depth];
 
+                    // search for existing child
                     var i: usize = 0;
                     while (i < n16.num_children) : (i += 1) {
                         if (n16.keys[i] == b) {
-                            // Prefix matches; descend into this child
+                            // descend (child may be replaced in-place)
                             return self.insertAt(allocator, n16.children[i].?, key, value, depth + 1);
                         }
                     }
@@ -668,101 +668,113 @@ pub fn AdaptiveRadixTree(comptime K: type, comptime V: type) type {
     };
 }
 
-// test "init/deinit" {
-//     const allocator = testing.allocator;
-
-//     var art = AdaptiveRadixTree([]const u8, u32).init(allocator);
-//     defer art.deinit(allocator);
-// }
-
-// test "inserting a value into tree" {
-//     const allocator = testing.allocator;
-
-//     var art = AdaptiveRadixTree([]const u8, u32).init(allocator);
-//     defer art.deinit(allocator);
-
-//     const key_1 = "h";
-//     const value_1 = 1;
-
-//     // add a first value into the tree
-//     try art.insert(allocator, key_1, value_1);
-//     try testing.expectEqual(1, art.size);
-
-//     try art.prettyPrint(allocator);
-
-//     // add a new value to the tree
-//     const key_2 = "he";
-//     const value_2 = 2;
-
-//     try art.insert(allocator, key_2, value_2);
-//     try testing.expectEqual(2, art.size);
-
-//     try art.prettyPrint(allocator);
-
-//     // add a new value to the tree
-//     const key_3 = "hel";
-//     const value_3 = 3;
-
-//     try art.insert(allocator, key_3, value_3);
-//     try testing.expectEqual(3, art.size);
-
-//     const key_4 = "hell";
-//     const value_4 = 4;
-
-//     try art.insert(allocator, key_4, value_4);
-//     try testing.expectEqual(4, art.size);
-
-//     const key_5 = "hello";
-//     const value_5 = 5;
-
-//     try art.insert(allocator, key_5, value_5);
-//     try testing.expectEqual(5, art.size);
-
-//     const key_6 = "hello_";
-//     const value_6 = 6;
-
-//     try art.insert(allocator, key_6, value_6);
-//     try testing.expectEqual(6, art.size);
-
-//     const key_7 = "hello_w";
-//     const value_7 = 7;
-
-//     try art.insert(allocator, key_7, value_7);
-//     try testing.expectEqual(7, art.size);
-
-//     const key_8 = "hello_wo";
-//     const value_8 = 8;
-
-//     try art.insert(allocator, key_8, value_8);
-//     try testing.expectEqual(8, art.size);
-
-//     // try art.prettyPrint(allocator);
-// }
-
-test "insert 100 items" {
+test "init/deinit" {
     const allocator = testing.allocator;
 
-    var art = AdaptiveRadixTree([]const u8, usize).init(allocator);
+    var art = AdaptiveRadixTree([]const u8, u32).init(allocator);
+    defer art.deinit(allocator);
+}
+
+test "inserting a value into tree" {
+    const allocator = testing.allocator;
+
+    var art = AdaptiveRadixTree([]const u8, u32).init(allocator);
     defer art.deinit(allocator);
 
-    const iters: usize = 100;
-    var keys = try std.ArrayList([]const u8).initCapacity(allocator, iters);
-    defer keys.deinit(allocator);
+    const key_1 = "h";
+    const value_1 = 1;
 
-    const prefix = "prefix";
-    for (0..iters) |i| {
-        const k = try std.fmt.allocPrint(allocator, "{s}{d}", .{ prefix, i });
-        try keys.append(allocator, k);
-        try art.insert(allocator, k, i);
-    }
+    // add a first value into the tree
+    try art.insert(allocator, key_1, value_1);
+    try testing.expectEqual(1, art.size);
 
-    try testing.expectEqual(iters, art.size);
+    const key_2 = "he";
+    const value_2 = 2;
 
-    defer {
-        for (keys.items) |k| {
-            allocator.free(k);
-        }
-    }
+    try art.insert(allocator, key_2, value_2);
+    try testing.expectEqual(2, art.size);
+
+    const key_3 = "hel";
+    const value_3 = 3;
+
+    try art.insert(allocator, key_3, value_3);
+    try testing.expectEqual(3, art.size);
+
+    const key_4 = "hell";
+    const value_4 = 4;
+
+    try art.insert(allocator, key_4, value_4);
+    try testing.expectEqual(4, art.size);
+
+    const key_5 = "hello";
+    const value_5 = 5;
+
+    try art.insert(allocator, key_5, value_5);
+    try testing.expectEqual(5, art.size);
+
+    const key_6 = "hello_";
+    const value_6 = 6;
+
+    try art.insert(allocator, key_6, value_6);
+    try testing.expectEqual(6, art.size);
+
+    const key_7 = "hello_w";
+    const value_7 = 7;
+
+    try art.insert(allocator, key_7, value_7);
+    try testing.expectEqual(7, art.size);
+
+    const key_8 = "hello_wo";
+    const value_8 = 8;
+
+    try art.insert(allocator, key_8, value_8);
+    try testing.expectEqual(8, art.size);
+
+    const key_9 = "hello_wor";
+    const value_9 = 9;
+
+    try art.insert(allocator, key_9, value_9);
+    try testing.expectEqual(9, art.size);
+
+    // const key_10 = "hello_worl";
+    // const value_10 = 10;
+
+    // try art.insert(allocator, key_10, value_10);
+    // try testing.expectEqual(10, art.size);
+
+    // const key_11 = "hello_world";
+    // const value_11 = 11;
+
+    // try art.insert(allocator, key_11, value_11);
+    // try testing.expectEqual(11, art.size);
 
     try art.prettyPrint(allocator);
 }
+
+// test "insert 100 items" {
+//     const allocator = testing.allocator;
+
+//     var art = AdaptiveRadixTree([]const u8, usize).init(allocator);
+//     defer art.deinit(allocator);
+
+//     const iters: usize = 100;
+//     var keys = try std.ArrayList([]const u8).initCapacity(allocator, iters);
+//     defer keys.deinit(allocator);
+
+//     const prefix = "prefix";
+//     for (0..iters) |i| {
+//         const k = try std.fmt.allocPrint(allocator, "{s}{d}", .{ prefix, i });
+//         try keys.append(allocator, k);
+//         try art.insert(allocator, k, i);
+//     }
+
+//     try testing.expectEqual(iters, art.size);
+
+//     defer {
+//         for (keys.items) |k| {
+//             allocator.free(k);
+//         }
+//     }
+
+//     try art.prettyPrint(allocator);
+// }
