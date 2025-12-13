@@ -207,58 +207,22 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
                     // ---------------- prefixes mismatch -> split node ----------------
                     if (i < n4.prefix_len) {
-                        const old_byte = n4.prefix[i];
-                        const new_byte: u8 = if (depth + i < key.len) key[depth + i] else 0;
-
-                        // new parent node
-                        const parent = try allocator.create(Node);
-                        parent.* = Node{
-                            .node_4 = .{
-                                .prefix_len = @intCast(i),
-                                .prefix = undefined,
-                                .num_children = 0,
-                                .keys = [_]u8{0} ** 4,
-                                .children = [_]?*Node{null} ** 4,
-                            },
-                        };
-                        @memcpy(parent.node_4.prefix[0..i], n4.prefix[0..i]);
-
-                        // Clone old node
-                        const old_child = try allocator.create(Node);
-                        old_child.* = node_ptr.*;
-
-                        // fix old child's prefix
-                        const skip = i + 1;
-                        old_child.node_4.prefix_len -= @intCast(skip);
-                        @memmove(
-                            old_child.node_4.prefix[0..old_child.node_4.prefix_len],
-                            old_child.node_4.prefix[skip .. skip + old_child.node_4.prefix_len],
+                        return self.splitNode4Prefix(
+                            allocator,
+                            node_ptr,
+                            n4,
+                            key,
+                            value,
+                            depth,
+                            i,
                         );
-
-                        // create new leaf
-                        const new_leaf = try allocator.create(Node);
-                        new_leaf.* = .{ .leaf = .{ .key = key, .value = value } };
-
-                        // insert children
-                        parent.node_4.keys[0] = old_byte;
-                        parent.node_4.children[0] = old_child;
-                        parent.node_4.keys[1] = new_byte;
-                        parent.node_4.children[1] = new_leaf;
-                        parent.node_4.num_children = 2;
-
-                        // replace node in-place
-                        node_ptr.* = parent.*;
-                        allocator.destroy(parent);
-
-                        self.size += 1;
-                        return;
                     }
 
                     // ---------------- prefixes match ----------------
                     const next_depth = depth + n4.prefix_len;
                     const b: u8 = if (next_depth < key.len) key[next_depth] else 0;
 
-                    // search for existing child
+                    // search for existing child, if found recursively `insertAt`
                     i = 0;
                     while (i < n4.num_children) : (i += 1) {
                         if (n4.keys[i] == b) {
@@ -285,63 +249,135 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                         return;
                     }
 
-                    // ---- Node4 full, grow to Node16 ----
-                    const new_node = try allocator.create(Node);
-                    new_node.* = Node{
-                        .node_16 = .{
-                            .prefix_len = n4.prefix_len,
-                            .prefix = n4.prefix,
-                            .num_children = n4.num_children,
-                            .keys = [_]u8{0} ** 16,
-                            .children = [_]?*Node{null} ** 16,
-                        },
-                    };
-
-                    var n16 = &new_node.node_16;
-
-                    // copy the keys and children from the Node4 to the Node16
-                    var j: usize = 0;
-                    while (j < n4.num_children) : (j += 1) {
-                        n16.keys[j] = n4.keys[j];
-                        n16.children[j] = n4.children[j];
-                    }
-
-                    // find the sorted position of where the new_leaf should be inserted
-                    const insert_pos = blk: {
-                        var k: usize = 0;
-                        while (k < n16.num_children and n16.keys[k] < b) : (k += 1) {}
-                        break :blk k;
-                    };
-
-                    // shift right to make room
-                    @memmove(
-                        n16.keys[insert_pos + 1 .. n16.num_children + 1],
-                        n16.keys[insert_pos..n16.num_children],
-                    );
-                    @memmove(
-                        n16.children[insert_pos + 1 .. n16.num_children + 1],
-                        n16.children[insert_pos..n16.num_children],
-                    );
-
-                    // create the new leaf
-                    const new_leaf = try allocator.create(Node);
-                    new_leaf.* = .{ .leaf = .{ .key = key, .value = value } };
-
-                    // insert the new leaf
-                    n16.keys[insert_pos] = b;
-                    n16.children[insert_pos] = new_leaf;
-                    n16.num_children += 1;
-
-                    // replace node_ptr in-place
-                    node_ptr.* = new_node.*;
-                    allocator.destroy(new_node);
-
-                    self.size += 1;
-                    return;
+                    // ---- Node4 full -> grow to Node16 ----
+                    return self.growNode4ToNode16(allocator, node_ptr, n4, key, value, depth);
                 },
 
                 else => unreachable,
             }
+        }
+
+        fn splitNode4Prefix(
+            self: *Self,
+            allocator: std.mem.Allocator,
+            node_ptr: *Node,
+            n4: *Node4,
+            key: []const u8,
+            value: V,
+            depth: usize,
+            index: usize,
+        ) !void {
+            const old_byte = n4.prefix[index];
+            const new_byte: u8 = if (depth + index < key.len) key[depth + index] else 0;
+
+            // new parent node
+            const parent = try allocator.create(Node);
+            parent.* = Node{
+                .node_4 = .{
+                    .prefix_len = @intCast(index),
+                    .prefix = undefined,
+                    .num_children = 0,
+                    .keys = [_]u8{0} ** 4,
+                    .children = [_]?*Node{null} ** 4,
+                },
+            };
+            @memcpy(parent.node_4.prefix[0..index], n4.prefix[0..index]);
+
+            // Clone old node
+            const old_child = try allocator.create(Node);
+            old_child.* = node_ptr.*;
+
+            // fix old child's prefix
+            const skip = index + 1;
+            old_child.node_4.prefix_len -= @intCast(skip);
+            @memmove(
+                old_child.node_4.prefix[0..old_child.node_4.prefix_len],
+                old_child.node_4.prefix[skip .. skip + old_child.node_4.prefix_len],
+            );
+
+            // create new leaf
+            const new_leaf = try allocator.create(Node);
+            new_leaf.* = .{ .leaf = .{ .key = key, .value = value } };
+
+            // insert children
+            parent.node_4.keys[0] = old_byte;
+            parent.node_4.children[0] = old_child;
+            parent.node_4.keys[1] = new_byte;
+            parent.node_4.children[1] = new_leaf;
+            parent.node_4.num_children = 2;
+
+            // replace node in-place
+            node_ptr.* = parent.*;
+            allocator.destroy(parent);
+
+            self.size += 1;
+            return;
+        }
+
+        fn growNode4ToNode16(
+            self: *Self,
+            allocator: std.mem.Allocator,
+            node_ptr: *Node,
+            n4: *Node4,
+            key: []const u8,
+            value: V,
+            depth: usize,
+        ) !void {
+            const next_depth = depth + n4.prefix_len;
+            const b: u8 = if (next_depth < key.len) key[next_depth] else 0;
+
+            const new_node = try allocator.create(Node);
+            new_node.* = Node{
+                .node_16 = .{
+                    .prefix_len = n4.prefix_len,
+                    .prefix = n4.prefix,
+                    .num_children = n4.num_children,
+                    .keys = [_]u8{0} ** 16,
+                    .children = [_]?*Node{null} ** 16,
+                },
+            };
+
+            var n16 = &new_node.node_16;
+
+            // copy the keys and children from the Node4 to the Node16
+            var j: usize = 0;
+            while (j < n4.num_children) : (j += 1) {
+                n16.keys[j] = n4.keys[j];
+                n16.children[j] = n4.children[j];
+            }
+
+            // find the sorted position of where the new_leaf should be inserted
+            const insert_pos = blk: {
+                var k: usize = 0;
+                while (k < n16.num_children and n16.keys[k] < b) : (k += 1) {}
+                break :blk k;
+            };
+
+            // shift right to make room
+            @memmove(
+                n16.keys[insert_pos + 1 .. n16.num_children + 1],
+                n16.keys[insert_pos..n16.num_children],
+            );
+            @memmove(
+                n16.children[insert_pos + 1 .. n16.num_children + 1],
+                n16.children[insert_pos..n16.num_children],
+            );
+
+            // create the new leaf
+            const new_leaf = try allocator.create(Node);
+            new_leaf.* = .{ .leaf = .{ .key = key, .value = value } };
+
+            // insert the new leaf
+            n16.keys[insert_pos] = b;
+            n16.children[insert_pos] = new_leaf;
+            n16.num_children += 1;
+
+            // replace node_ptr in-place
+            node_ptr.* = new_node.*;
+            allocator.destroy(new_node);
+
+            self.size += 1;
+            return;
         }
 
         fn destroyNode(allocator: std.mem.Allocator, node_opt: ?*Node) void {
