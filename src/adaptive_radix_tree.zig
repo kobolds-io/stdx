@@ -252,8 +252,79 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                     // ---- Node4 full -> grow to Node16 ----
                     return self.growNode4ToNode16(allocator, node_ptr, n4, key, value, depth);
                 },
+                .node_16 => |*n16| {
+                    // check the prefix
+                    const max_cmp = @min(n16.prefix_len, key.len - depth);
+                    var i: usize = 0;
+                    while (i < max_cmp and n16.prefix[i] == key[depth + i]) : (i += 1) {}
 
-                else => unreachable,
+                    // ---------------- prefixes mismatch -> split node ----------------
+                    if (i < n16.prefix_len) {
+                        return self.splitNode16Prefix(
+                            allocator,
+                            node_ptr,
+                            n16,
+                            key,
+                            value,
+                            depth,
+                            i,
+                        );
+                    }
+
+                    // ---------------- prefixes match ----------------
+                    const next_depth = depth + n16.prefix_len;
+                    const b: u8 = if (next_depth < key.len) key[next_depth] else 0;
+
+                    // search for existing child, if found recursively `insertAt`
+                    var idx: usize = 0;
+                    while (idx < n16.num_children) : (idx += 1) {
+                        if (n16.keys[idx] == b) {
+                            return self.insertAt(
+                                allocator,
+                                n16.children[idx].?,
+                                key,
+                                value,
+                                depth + 1,
+                            );
+                        }
+                    }
+
+                    // ---------------- insert a new leaf (without growing) ----------------
+                    if (n16.num_children < n16.children.len) {
+                        // sort the insert
+                        idx = 0;
+                        while (idx < n16.num_children and n16.keys[idx] < b) : (idx += 1) {}
+
+                        @memmove(
+                            n16.keys[idx + 1 .. n16.num_children + 1],
+                            n16.keys[idx..n16.num_children],
+                        );
+                        @memmove(
+                            n16.children[idx + 1 .. n16.num_children + 1],
+                            n16.children[idx..n16.num_children],
+                        );
+
+                        const new_leaf = try allocator.create(Node);
+                        new_leaf.* = .{ .leaf = .{ .key = key, .value = value } };
+
+                        n16.keys[idx] = b;
+                        n16.children[idx] = new_leaf;
+                        n16.num_children += 1;
+                        self.size += 1;
+                        return;
+                    }
+
+                    // ---- Node16 full -> grow to Node48 ----
+                    return self.growNode16ToNode48(allocator, node_ptr, n16, key, value, depth);
+                },
+                .node_48 => |*n48| {
+                    _ = n48;
+                },
+
+                else => |t| {
+                    std.debug.print("t: {any}\n", .{t});
+                    unreachable;
+                },
             }
         }
 
@@ -378,6 +449,121 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
             self.size += 1;
             return;
+        }
+
+        fn splitNode16Prefix(
+            self: *Self,
+            allocator: std.mem.Allocator,
+            node_ptr: *Node,
+            n16: *Node16,
+            key: []const u8,
+            value: V,
+            depth: usize,
+            index: usize,
+        ) !void {
+            // new parent node
+            const parent = try allocator.create(Node);
+            parent.* = Node{
+                .node_4 = .{
+                    .prefix_len = @intCast(index),
+                    .prefix = undefined,
+                    .num_children = 0,
+                    .keys = [_]u8{0} ** 4,
+                    .children = [_]?*Node{null} ** 4,
+                },
+            };
+
+            const n4 = &parent.node_4;
+            @memcpy(n4.prefix[0..index], n16.prefix[0..index]);
+
+            // old node gets its prefix trimmed
+            const old_byte = n16.prefix[index];
+            n16.prefix_len -= @intCast(index + 1);
+            @memmove(
+                n16.prefix[0..n16.prefix_len],
+                n16.prefix[index + 1 .. index + 1 + n16.prefix_len],
+            );
+
+            // assign the node_4 a child of "this"
+            n4.keys[0] = old_byte;
+            n4.children[0] = node_ptr;
+            n4.num_children = 1;
+
+            // create a new leaf
+            const new_leaf = try allocator.create(Node);
+            new_leaf.* = .{ .leaf = .{ .key = key, .value = value } };
+
+            // assign the new leaf as another child of the new parent
+            n4.keys[1] = key[depth + index];
+            n4.children[1] = new_leaf;
+            n4.num_children = 2;
+
+            node_ptr.* = parent.*;
+            allocator.destroy(parent);
+
+            self.size += 1;
+            return;
+        }
+
+        fn growNode16ToNode48(
+            self: *Self,
+            allocator: std.mem.Allocator,
+            node_ptr: *Node,
+            n16: *Node16,
+            key: []const u8,
+            value: V,
+            depth: usize,
+        ) !void {
+            const new_node = try allocator.create(Node);
+            new_node.* = .{
+                .node_48 = .{
+                    .prefix_len = n16.prefix_len,
+                    .prefix = n16.prefix,
+                    .num_children = n16.num_children,
+                    .index = [_]u8{0xFF} ** 256,
+                    .children = [_]?*Node{null} ** 48,
+                    .keys = [_]u8{0} ** 256,
+                },
+            };
+
+            var n48 = &new_node.node_48;
+
+            // Copy Node16 children into Node48
+            var i: usize = 0;
+            while (i < n16.num_children) : (i += 1) {
+                const byte = n16.keys[i];
+                n48.children[i] = n16.children[i];
+                n48.index[byte] = @intCast(i);
+                n48.keys[byte] = @intCast(i + 1);
+            }
+
+            const next_depth = depth + n16.prefix_len;
+            const b: u8 = if (next_depth < key.len) key[next_depth] else 0;
+
+            // Allocate new leaf
+            const new_leaf = try allocator.create(Node);
+            new_leaf.* = .{ .leaf = .{ .key = key, .value = value } };
+
+            // Find first free child slot
+            var slot: usize = 0;
+            while (slot < 48) : (slot += 1) {
+                if (n48.children[slot] == null) break;
+            }
+
+            std.debug.assert(slot < 48);
+            std.debug.assert(n48.index[b] == 0xFF);
+
+            // Insert
+            n48.children[slot] = new_leaf;
+            n48.index[b] = @intCast(slot);
+            n48.keys[b] = @intCast(slot + 1);
+            n48.num_children += 1;
+
+            // Replace node in place
+            node_ptr.* = new_node.*;
+            allocator.destroy(new_node);
+
+            self.size += 1;
         }
 
         fn destroyNode(allocator: std.mem.Allocator, node_opt: ?*Node) void {
@@ -673,4 +859,56 @@ test "node4 grows to node16" {
     const root = art.root orelse return error.TestFailed;
 
     try testing.expectEqual(5, root.node_16.num_children);
+}
+
+test "node16 grows to node48" {
+    const allocator = testing.allocator;
+
+    var art = AdaptiveRadixTree(u32).init(allocator);
+    defer art.deinit(allocator);
+
+    var keys: std.ArrayList([]const u8) = .empty;
+    defer keys.deinit(allocator);
+
+    const k0 = "a0";
+    const k1 = "a1";
+    const k2 = "a2";
+    const k3 = "a3";
+    const k4 = "a4";
+    const k5 = "a5";
+    const k6 = "a6";
+    const k7 = "a7";
+    const k8 = "a8";
+    const k9 = "a9";
+    const k10 = "aa";
+    const k11 = "ab";
+    const k12 = "ac";
+    const k13 = "ad";
+    const k14 = "ae";
+    const k15 = "af";
+    const k16 = "ag";
+
+    try art.insert(allocator, k0, 0);
+    try art.insert(allocator, k1, 0);
+    try art.insert(allocator, k2, 0);
+    try art.insert(allocator, k3, 0);
+    try art.insert(allocator, k4, 0);
+    try art.insert(allocator, k5, 0);
+    try art.insert(allocator, k6, 0);
+    try art.insert(allocator, k7, 0);
+    try art.insert(allocator, k8, 0);
+    try art.insert(allocator, k9, 0);
+    try art.insert(allocator, k10, 0);
+    try art.insert(allocator, k11, 0);
+    try art.insert(allocator, k12, 0);
+    try art.insert(allocator, k13, 0);
+    try art.insert(allocator, k14, 0);
+    try art.insert(allocator, k15, 0);
+    try art.insert(allocator, k16, 0);
+
+    // try art.prettyPrint(allocator);
+
+    const root = art.root orelse return error.TestFailed;
+    try testing.expectEqual(17, art.size);
+    try testing.expectEqual(17, root.node_48.num_children);
 }
