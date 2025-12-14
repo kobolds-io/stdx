@@ -861,6 +861,8 @@ test "node4 grows to node16" {
     try testing.expectEqual(5, root.node_16.num_children);
 }
 
+test "node16 prefix mismatch split" {}
+
 test "node16 grows to node48" {
     const allocator = testing.allocator;
 
