@@ -461,9 +461,15 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             depth: usize,
             index: usize,
         ) !void {
-            // new parent node
+            // Clone the old Node16 so we don't create cycles
+            const old_node = try allocator.create(Node);
+            old_node.* = node_ptr.*;
+
+            const old_n16 = &old_node.node_16;
+
+            // Create new parent Node4
             const parent = try allocator.create(Node);
-            parent.* = Node{
+            parent.* = .{
                 .node_4 = .{
                     .prefix_len = @intCast(index),
                     .prefix = undefined,
@@ -474,35 +480,40 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             };
 
             const n4 = &parent.node_4;
+
+            // Copy shared prefix
             @memcpy(n4.prefix[0..index], n16.prefix[0..index]);
 
-            // old node gets its prefix trimmed
+            // Trim prefix of old node
             const old_byte = n16.prefix[index];
-            n16.prefix_len -= @intCast(index + 1);
+            old_n16.prefix_len -= @intCast(index + 1);
+
             @memmove(
-                n16.prefix[0..n16.prefix_len],
-                n16.prefix[index + 1 .. index + 1 + n16.prefix_len],
+                old_n16.prefix[0..old_n16.prefix_len],
+                old_n16.prefix[index + 1 .. index + 1 + old_n16.prefix_len],
             );
 
-            // assign the node_4 a child of "this"
+            // Attach old node as first child
             n4.keys[0] = old_byte;
-            n4.children[0] = node_ptr;
+            n4.children[0] = old_node;
             n4.num_children = 1;
 
-            // create a new leaf
+            // Create new leaf for incoming key
             const new_leaf = try allocator.create(Node);
             new_leaf.* = .{ .leaf = .{ .key = key, .value = value } };
 
-            // assign the new leaf as another child of the new parent
-            n4.keys[1] = key[depth + index];
+            const new_byte: u8 = if (depth + index < key.len) key[depth + index] else 0;
+
+            // Attach new leaf
+            n4.keys[1] = new_byte;
             n4.children[1] = new_leaf;
             n4.num_children = 2;
 
+            // Replace node_ptr with parent
             node_ptr.* = parent.*;
             allocator.destroy(parent);
 
             self.size += 1;
-            return;
         }
 
         fn growNode16ToNode48(
@@ -749,7 +760,7 @@ test "insert into a an empty tree" {
     try testing.expect(std.mem.eql(u8, v, art.root.?.leaf.value));
 }
 
-test "upgrade root node from leaf to node_4 on second insert" {
+test "grow root from leaf to node_4 on second insert" {
     const allocator = testing.allocator;
 
     var art = AdaptiveRadixTree(u32).init(allocator);
@@ -861,7 +872,51 @@ test "node4 grows to node16" {
     try testing.expectEqual(5, root.node_16.num_children);
 }
 
-test "node16 prefix mismatch split" {}
+test "node16 prefix mismatch split" {
+    const allocator = testing.allocator;
+
+    var art = AdaptiveRadixTree(u32).init(allocator);
+    defer art.deinit(allocator);
+
+    // These two keys share "ab", then diverge at index 2
+    // This guarantees a Node4 prefix mismatch split
+    const k0 = "a0";
+    const k1 = "a1";
+    const k2 = "a2";
+    const k3 = "a3";
+    const k4 = "a4";
+    const k5 = "b5";
+
+    try art.insert(allocator, k0, 0);
+    try art.insert(allocator, k1, 0); // upgrade to Node4
+    try art.insert(allocator, k2, 0);
+    try art.insert(allocator, k3, 0);
+    try art.insert(allocator, k4, 0); // upgrade to Node16
+    try art.insert(allocator, k5, 0); // split the Node16
+
+    // try art.prettyPrint(allocator);
+
+    try testing.expectEqual(6, art.size);
+
+    // Root must be Node4 after split
+    const root = art.root orelse return error.TestFailed;
+
+    // there are 2 kiddos
+    try testing.expectEqual(2, root.node_4.num_children);
+    try testing.expectEqual(0, root.node_4.prefix_len);
+
+    // expect the first child to be the Node16
+    const child_node_16 = root.node_4.children[0] orelse return error.TestFailed;
+    try testing.expectEqual(0, child_node_16.node_16.prefix_len);
+    try testing.expectEqualStrings(k0, child_node_16.node_16.children[0].?.leaf.key);
+    try testing.expectEqualStrings(k1, child_node_16.node_16.children[1].?.leaf.key);
+    try testing.expectEqualStrings(k2, child_node_16.node_16.children[2].?.leaf.key);
+    try testing.expectEqualStrings(k3, child_node_16.node_16.children[3].?.leaf.key);
+    try testing.expectEqualStrings(k4, child_node_16.node_16.children[4].?.leaf.key);
+
+    const child_leaf_node = root.node_4.children[1] orelse return error.TestFailed;
+    try testing.expectEqualStrings(k5, child_leaf_node.leaf.key);
+}
 
 test "node16 grows to node48" {
     const allocator = testing.allocator;
@@ -906,7 +961,7 @@ test "node16 grows to node48" {
     try art.insert(allocator, k13, 0);
     try art.insert(allocator, k14, 0);
     try art.insert(allocator, k15, 0);
-    try art.insert(allocator, k16, 0);
+    try art.insert(allocator, k16, 0); // grow to Node48
 
     // try art.prettyPrint(allocator);
 
