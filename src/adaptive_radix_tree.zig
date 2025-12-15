@@ -260,7 +260,6 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                                 while (j < n4.num_children) : (j += 1) {
                                     // handle the case where we cannot shift left
                                     if (j == 0) continue;
-                                    // std.debug.print("j: {}, idx: {}\n", .{ j, idx });
 
                                     // shift left
                                     n4.keys[j - 1] = n4.keys[j];
@@ -274,7 +273,17 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
                             n4.num_children -= 1;
 
-                            // TODO: if there is only a single item remaining we should resize to a leaf
+                            // if there is only a single child left, shrink this Node4 into a Leaf
+                            if (n4.num_children == 1) {
+                                const child = n4.children[0].?;
+                                switch (child.*) {
+                                    .leaf => {
+                                        node_ptr.* = child.*;
+                                        allocator.destroy(child);
+                                    },
+                                    else => {},
+                                }
+                            }
 
                             if (n4.num_children == 0) {
                                 // destroy this node
