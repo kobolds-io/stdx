@@ -502,15 +502,16 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
                     // child exists -> recurse
                     if (n256.children[b]) |child| {
-                        // switch (child.*) {
-                        //     .node_4 => |n4| {
-                        //         std.debug.print("keys: {any}, children: {any}\n", .{
-                        //             n4.keys[0..n4.num_children],
-                        //             n4.children[0..n4.num_children],
-                        //         });
-                        //     },
-                        //     else => {},
-                        // }
+                        switch (child.*) {
+                            .node_4 => |*n4| {
+                                var j: usize = 0;
+                                while (j < n4.num_children) : (j += 1) {
+                                    std.debug.print("n4.keys: {any}\n", .{n4.keys[0..n4.num_children]});
+                                }
+                                // TODO: should recompute the keys of this child
+                            },
+                            else => {},
+                        }
 
                         return self.insertAt(
                             allocator,
