@@ -225,94 +225,143 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             key: []const u8,
             depth: usize,
         ) bool {
-            _ = self;
-            _ = depth;
-
             switch (node_ptr.*) {
-                .leaf => |*leaf| {
+                .leaf => |leaf| {
                     if (!std.mem.eql(u8, leaf.key, key)) return false;
 
                     allocator.destroy(node_ptr);
                     return true;
                 },
+                .node_4 => |*n4| {
+                    // compare prefix
+                    var i: usize = 0;
+                    while (i < n4.prefix_len and depth + i < key.len and n4.prefix[i] == key[depth + i]) : (i += 1) {}
+
+                    // prefix mismatch -> key not present
+                    if (i < n4.prefix_len) return false;
+
+                    const next_depth = depth + n4.prefix_len;
+                    const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
+
+                    var idx: usize = 0;
+
+                    while (idx < n4.num_children) : (idx += 1) {
+                        if (n4.keys[idx] == b) {
+                            // if there is no child deleted, then there was not match!
+                            if (!self.deleteAt(allocator, n4.children[idx].?, key, next_depth + 1)) return false;
+
+                            // handle the case where the last child was removed
+                            if (idx == n4.num_children - 1) {
+                                n4.keys[idx] = 0;
+                                n4.children[idx] = null;
+                            } else {
+                                // shift children and keys left
+                                var j: usize = idx;
+                                while (j < n4.num_children) : (j += 1) {
+                                    // handle the case where we cannot shift left
+                                    if (j == 0) continue;
+                                    // std.debug.print("j: {}, idx: {}\n", .{ j, idx });
+
+                                    // shift left
+                                    n4.keys[j - 1] = n4.keys[j];
+                                    n4.children[j - 1] = n4.children[j];
+
+                                    // clean shifted slots
+                                    n4.keys[j] = 0;
+                                    n4.children[j] = null;
+                                }
+                            }
+
+                            n4.num_children -= 1;
+
+                            // TODO: if there is only a single item remaining we should resize to a leaf
+
+                            if (n4.num_children == 0) {
+                                // destroy this node
+                                allocator.destroy(node_ptr);
+                            }
+
+                            return true;
+                        }
+                    }
+
+                    // child with byte b not found -> key not present
+                    return false;
+                },
                 else => unreachable,
-                // .node_4 => |*n4| {
-                //     return self.deleteInner(
-                //         allocator,
-                //         node_ptr,
-                //         n4.prefix,
-                //         n4.prefix_len,
-                //         &n4.keys,
-                //         &n4.children,
-                //         &n4.num_children,
-                //         key,
-                //         depth,
-                //         4,
-                //     );
-                // },
-                // .node_16 => |*n16| {
-                //     return self.deleteInner(
-                //         allocator,
-                //         node_ptr,
-                //         n16.prefix,
-                //         n16.prefix_len,
-                //         &n16.keys,
-                //         &n16.children,
-                //         &n16.num_children,
-                //         key,
-                //         depth,
-                //         16,
-                //     );
-                // },
-                // .node_48 => |*n48| {
-                //     return self.deleteNode48(allocator, node_ptr, n48, key, depth);
-                // },
-                // .node_256 => |*n256| {
-                //     return self.deleteNode256(allocator, node_ptr, n256, key, depth);
-                // },
             }
         }
 
-        fn deleteInner(
-            self: *Self,
-            allocator: std.mem.Allocator,
-            node_ptr: *?*Node,
-            prefix: []u8,
-            prefix_len: u8,
-            keys: anytype,
-            children: anytype,
-            num_children: *u8,
-            key: []const u8,
-            depth: usize,
-            comptime max: usize,
-        ) bool {
-            _ = max;
-            if (depth + prefix_len > key.len) return false;
+        // fn deleteInnerNode(
+        //     self: *Self,
+        //     prefix_len: u8,
+        //     prefix: *const [MAX_PREFIX]u8,
+        //     keys: []const u8,
+        //     children: []const ?*Node,
+        //     key: []const u8,
+        //     depth: usize,
+        // ) bool {
+        //     const max_cmp = @min(prefix_len, key.len - depth);
+        //     var i: usize = 0;
+        //     while (i < max_cmp and prefix.*[i] == key[depth + i]) : (i += 1) {}
 
-            if (!std.mem.eql(u8, prefix[0..prefix_len], key[depth .. depth + prefix_len])) return false;
+        //     // --- check if prefix matches ---
+        //     if (i < prefix_len) return false;
 
-            const next_depth = depth + prefix_len;
-            const b: u8 = if (next_depth < key.len) key[next_depth] else 0;
+        //     // check if this key matches
 
-            const idx = findChildIndex(keys[0..num_children.*], b) orelse return false;
+        //     const next_depth = depth + prefix_len;
+        //     const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
 
-            if (!self.deleteAt(allocator, &children[idx], key, next_depth + 1))
-                return false;
+        //     for (keys, 0..) |k, idx| {
+        //         if (k == b) {
+        //             return self.deleteInnerNode(children[idx].?, key, next_depth + 1);
+        //         }
+        //     }
 
-            _ = removeNodeChild(keys, children, num_children, idx);
+        //     return false;
+        // }
 
-            if (num_children.* == 0) {
-                allocator.destroy(node_ptr.*.?);
-                node_ptr.* = null;
-                return true;
-            }
+        // fn deleteInner(
+        //     self: *Self,
+        //     allocator: std.mem.Allocator,
+        //     node_ptr: *?*Node,
+        //     prefix: []u8,
+        //     prefix_len: u8,
+        //     keys: anytype,
+        //     children: anytype,
+        //     num_children: *u8,
+        //     key: []const u8,
+        //     depth: usize,
+        //     comptime max: usize,
+        // ) bool {
+        //     _ = max;
+        //     if (depth + prefix_len > key.len) return false;
 
-            if (num_children.* == 1) {
-                self.collapseSingleChild(allocator, node_ptr);
-            }
+        //     if (!std.mem.eql(u8, prefix[0..prefix_len], key[depth .. depth + prefix_len])) return false;
 
-            return true;
-        }
+        //     const next_depth = depth + prefix_len;
+        //     const b: u8 = if (next_depth < key.len) key[next_depth] else 0;
+
+        //     const idx = findChildIndex(keys[0..num_children.*], b) orelse return false;
+
+        //     if (!self.deleteAt(allocator, &children[idx], key, next_depth + 1))
+        //         return false;
+
+        //     _ = removeNodeChild(keys, children, num_children, idx);
+
+        //     if (num_children.* == 0) {
+        //         allocator.destroy(node_ptr.*.?);
+        //         node_ptr.* = null;
+        //         return true;
+        //     }
+
+        //     if (num_children.* == 1) {
+        //         self.collapseSingleChild(allocator, node_ptr);
+        //     }
+
+        //     return true;
+        // }
 
         fn removeNodeChild(
             keys: []u8,
@@ -2051,4 +2100,71 @@ test "delete a leaf" {
 
     try testing.expect(art.root == null);
     try testing.expectEqual(0, art.size);
+}
+
+test "handle deletes from a node4 in non-linear order" {
+    const allocator = testing.allocator;
+
+    var art = AdaptiveRadixTree(u32).init(allocator);
+    defer art.deinit(allocator);
+
+    const key_0 = "aa";
+    const value_0 = 0;
+
+    const key_1 = "ab";
+    const value_1 = 1;
+
+    const key_2 = "ac";
+    const value_2 = 2;
+
+    const key_3 = "ad";
+    const value_3 = 3;
+
+    try art.insert(allocator, key_0, value_0);
+    try art.insert(allocator, key_1, value_1);
+    try art.insert(allocator, key_2, value_2);
+    try art.insert(allocator, key_3, value_3);
+
+    try testing.expect(art.root != null);
+    try testing.expectEqual(4, art.size);
+    try testing.expect(art.lookup(key_0) != null);
+    try testing.expect(art.lookup(key_1) != null);
+    try testing.expect(art.lookup(key_2) != null);
+    try testing.expect(art.lookup(key_3) != null);
+
+    switch (art.root.?.*) {
+        .node_4 => |n4| {
+            try testing.expectEqual(4, n4.num_children);
+        },
+        else => return error.TestFailed,
+    }
+
+    // std.debug.print("2 inserts\n", .{});
+    // try art.prettyPrint(allocator);
+
+    // std.debug.print("1 delete\n", .{});
+
+    try testing.expect(art.delete(allocator, key_3));
+    try testing.expect(art.root != null);
+    try testing.expectEqual(3, art.size);
+
+    // try art.prettyPrint(allocator);
+
+    try testing.expect(art.delete(allocator, key_0));
+    try testing.expect(art.root != null);
+    try testing.expectEqual(2, art.size);
+
+    // try art.prettyPrint(allocator);
+
+    try testing.expect(art.delete(allocator, key_2));
+    try testing.expect(art.root != null);
+    try testing.expectEqual(1, art.size);
+
+    // try art.prettyPrint(allocator);
+
+    try testing.expect(art.delete(allocator, key_1));
+    try testing.expect(art.root == null);
+    try testing.expectEqual(0, art.size);
+
+    // try art.prettyPrint(allocator);
 }
