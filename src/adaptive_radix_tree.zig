@@ -233,7 +233,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                     return true;
                 },
                 .node_4 => |*n4| {
-                    // compare prefix
+                    // ---------------- prefix compare ----------------
                     var i: usize = 0;
                     while (i < n4.prefix_len and depth + i < key.len and n4.prefix[i] == key[depth + i]) : (i += 1) {}
 
@@ -243,8 +243,8 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                     const next_depth = depth + n4.prefix_len;
                     const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
 
+                    // ---------------- lookup child ----------------
                     var idx: usize = 0;
-
                     while (idx < n4.num_children) : (idx += 1) {
                         if (n4.keys[idx] == b) {
                             // if there is no child deleted, then there was not match!
@@ -273,19 +273,10 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
                             n4.num_children -= 1;
 
-                            // if there is only a single child left, shrink this Node4 into a Leaf
                             if (n4.num_children == 1) {
-                                const child = n4.children[0].?;
-                                switch (child.*) {
-                                    .leaf => {
-                                        node_ptr.* = child.*;
-                                        allocator.destroy(child);
-                                    },
-                                    else => {},
-                                }
-                            }
-
-                            if (n4.num_children == 0) {
+                                // if there is only a single child left, shrink this Node4
+                                self.shrinkNode4(allocator, node_ptr, n4);
+                            } else if (n4.num_children == 0) {
                                 // destroy this node
                                 allocator.destroy(node_ptr);
                             }
@@ -297,352 +288,291 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                     // child with byte b not found -> key not present
                     return false;
                 },
-                else => unreachable,
-            }
-        }
-
-        // fn deleteInnerNode(
-        //     self: *Self,
-        //     prefix_len: u8,
-        //     prefix: *const [MAX_PREFIX]u8,
-        //     keys: []const u8,
-        //     children: []const ?*Node,
-        //     key: []const u8,
-        //     depth: usize,
-        // ) bool {
-        //     const max_cmp = @min(prefix_len, key.len - depth);
-        //     var i: usize = 0;
-        //     while (i < max_cmp and prefix.*[i] == key[depth + i]) : (i += 1) {}
-
-        //     // --- check if prefix matches ---
-        //     if (i < prefix_len) return false;
-
-        //     // check if this key matches
-
-        //     const next_depth = depth + prefix_len;
-        //     const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
-
-        //     for (keys, 0..) |k, idx| {
-        //         if (k == b) {
-        //             return self.deleteInnerNode(children[idx].?, key, next_depth + 1);
-        //         }
-        //     }
-
-        //     return false;
-        // }
-
-        // fn deleteInner(
-        //     self: *Self,
-        //     allocator: std.mem.Allocator,
-        //     node_ptr: *?*Node,
-        //     prefix: []u8,
-        //     prefix_len: u8,
-        //     keys: anytype,
-        //     children: anytype,
-        //     num_children: *u8,
-        //     key: []const u8,
-        //     depth: usize,
-        //     comptime max: usize,
-        // ) bool {
-        //     _ = max;
-        //     if (depth + prefix_len > key.len) return false;
-
-        //     if (!std.mem.eql(u8, prefix[0..prefix_len], key[depth .. depth + prefix_len])) return false;
-
-        //     const next_depth = depth + prefix_len;
-        //     const b: u8 = if (next_depth < key.len) key[next_depth] else 0;
-
-        //     const idx = findChildIndex(keys[0..num_children.*], b) orelse return false;
-
-        //     if (!self.deleteAt(allocator, &children[idx], key, next_depth + 1))
-        //         return false;
-
-        //     _ = removeNodeChild(keys, children, num_children, idx);
-
-        //     if (num_children.* == 0) {
-        //         allocator.destroy(node_ptr.*.?);
-        //         node_ptr.* = null;
-        //         return true;
-        //     }
-
-        //     if (num_children.* == 1) {
-        //         self.collapseSingleChild(allocator, node_ptr);
-        //     }
-
-        //     return true;
-        // }
-
-        fn removeNodeChild(
-            keys: []u8,
-            children: []?*Node,
-            num_children: *u8,
-            idx: usize,
-        ) void {
-            const n = num_children.*;
-
-            // Shift keys and children left
-            var i: usize = idx;
-            while (i + 1 < n) : (i += 1) {
-                keys[i] = keys[i + 1];
-                children[i] = children[i + 1];
-            }
-
-            // Clear trailing slot
-            keys[n - 1] = 0;
-            children[n - 1] = null;
-
-            num_children.* -= 1;
-        }
-
-        fn deleteNode48(
-            self: *Self,
-            allocator: std.mem.Allocator,
-            node_ptr: *?*Node,
-            n48: *Node48,
-            key: []const u8,
-            depth: usize,
-        ) bool {
-            if (depth + n48.prefix_len > key.len) return false;
-
-            if (!std.mem.eql(u8, n48.prefix[0..n48.prefix_len], key[depth .. depth + n48.prefix_len]))
-                return false;
-
-            const next_depth = depth + n48.prefix_len;
-            const b: u8 = if (next_depth < key.len) key[next_depth] else 0;
-
-            const idx = n48.index[b];
-            if (idx == 0xFF) return false;
-
-            if (!self.deleteAt(allocator, &n48.children[idx], key, next_depth + 1))
-                return false;
-
-            n48.children[idx] = null;
-            n48.index[b] = 0xFF;
-            n48.keys[b] = 0;
-            n48.num_children -= 1;
-
-            if (n48.num_children == 0) {
-                allocator.destroy(node_ptr.*.?);
-                node_ptr.* = null;
-                return true;
-            }
-
-            if (n48.num_children <= 16) {
-                self.shrinkNode48ToNode16(allocator, node_ptr);
-            }
-
-            return true;
-        }
-
-        fn deleteNode256(
-            self: *Self,
-            allocator: std.mem.Allocator,
-            node_ptr: *?*Node,
-            n256: *Node256,
-            key: []const u8,
-            depth: usize,
-        ) bool {
-            if (depth + n256.prefix_len > key.len) return false;
-
-            if (!std.mem.eql(u8, n256.prefix[0..n256.prefix_len], key[depth .. depth + n256.prefix_len]))
-                return false;
-
-            const next_depth = depth + n256.prefix_len;
-            const b: u8 = if (next_depth < key.len) key[next_depth] else 0;
-
-            if (n256.children[b] == null) return false;
-
-            if (!self.deleteAt(allocator, &n256.children[b], key, next_depth + 1))
-                return false;
-
-            n256.children[b] = null;
-            n256.num_children -= 1;
-
-            if (n256.num_children == 0) {
-                allocator.destroy(node_ptr.*.?);
-                node_ptr.* = null;
-                return true;
-            }
-
-            if (n256.num_children <= 48) {
-                self.shrinkNode256ToNode48(allocator, node_ptr);
-            }
-
-            return true;
-        }
-
-        fn collapseSingleChild(_: *Self, allocator: std.mem.Allocator, node_ptr: *Node) void {
-            var child: *Node = undefined;
-            var b: u8 = 0;
-
-            switch (node_ptr.*) {
-                .node_4 => |n4| {
-                    child = n4.children[0].?;
-                    b = n4.keys[0];
-                },
-                .node_16 => |n16| {
-                    child = n16.children[0].?;
-                    b = n16.keys[0];
-                },
-                else => unreachable,
-            }
-
-            // merge prefixes
-            // Self.mergePrefixes(node_ptr., child, b);
-
-            allocator.destroy(node_ptr);
-            node_ptr.* = child;
-        }
-
-        fn mergePrefixes(
-            parent_prefix: []const u8,
-            edge_byte: u8,
-            child_prefix: []u8,
-            child_prefix_len: *u8,
-        ) void {
-            const old_len = child_prefix_len.*;
-
-            // Total new prefix length (bounded by MAX_PREFIX)
-            var new_len: usize = parent_prefix.len + 1 + old_len;
-            if (new_len > MAX_PREFIX) {
-                new_len = MAX_PREFIX;
-            }
-
-            // Shift existing child prefix right
-            const shift = @min(old_len, MAX_PREFIX - (parent_prefix.len + 1));
-            if (shift > 0) {
-                @memmove(
-                    child_prefix[parent_prefix.len + 1 .. parent_prefix.len + 1 + shift],
-                    child_prefix[0..shift],
-                );
-            }
-
-            // Copy parent prefix
-            if (parent_prefix.len > 0) {
-                @memcpy(
-                    child_prefix[0..parent_prefix.len],
-                    parent_prefix,
-                );
-            }
-
-            // Insert edge byte
-            if (parent_prefix.len < MAX_PREFIX) {
-                child_prefix[parent_prefix.len] = edge_byte;
-            }
-
-            child_prefix_len.* = @intCast(new_len);
-        }
-
-        fn findChildIndex(keys: []const u8, num_children: usize, b: u8) ?usize {
-            assert(keys.len <= num_children);
-            var i: usize = 0;
-            while (i < num_children) : (i += 1) {
-                if (keys[i] == b) return i;
-            }
-
-            return null;
-        }
-
-        fn findChildIndexNode48(index: *const [256]u8, b: u8) ?usize {
-            const idx = index[b];
-            if (idx == 0xFF) return null;
-            return @intCast(idx);
-        }
-
-        fn findChildIndexNode256(children: *const [256]?*Node, b: u8) ?usize {
-            if (children[b] == null) return null;
-            return @intCast(b);
-        }
-
-        fn removeNode4Child(n4: *Node4, idx: usize) *Node {
-            assert(idx < n4.num_children);
-
-            const removed = n4.children[idx].?;
-
-            // shift keys and children left
-            var i: usize = idx;
-            while (i + 1 < n4.num_children) : (i += 1) {
-                n4.keys[i] = n4.keys[i + 1];
-                n4.children[i] = n4.children[i + 1];
-            }
-
-            // clear last slot
-            const last = n4.num_children - 1;
-            n4.keys[last] = 0;
-            n4.children[last] = null;
-
-            n4.num_children -= 1;
-
-            return removed;
-        }
-
-        fn removeNode16Child(n16: *Node16, idx: usize) *Node {
-            assert(idx < n16.num_children);
-
-            const removed = n16.children[idx].?;
-
-            // Shift keys and children left
-            var i: usize = idx;
-            while (i + 1 < n16.num_children) : (i += 1) {
-                n16.keys[i] = n16.keys[i + 1];
-                n16.children[i] = n16.children[i + 1];
-            }
-
-            // Clear last slot
-            const last = n16.num_children - 1;
-            n16.keys[last] = 0;
-            n16.children[last] = null;
-
-            n16.num_children -= 1;
-
-            return removed;
-        }
-
-        fn removeNode48Child(n48: *Node48, b: u8) *Node {
-            const slot = n48.index[b];
-            assert(slot != 0xFF);
-            assert(slot < n48.num_children);
-
-            const removed = n48.children[slot].?;
-
-            // Clear byte mapping
-            n48.index[b] = 0xFF;
-            n48.keys[b] = 0;
-
-            const last = n48.num_children - 1;
-
-            // If not removing last slot, move last child into open_slot
-            if (slot != last) {
-                const moved = n48.children[last].?;
-                n48.children[slot] = moved;
-
-                // Find which byte pointed to last slot
-                var i: usize = 0;
-                while (i < n48.index.len) : (i += 1) {
-                    if (n48.index[i] == last) {
-                        n48.index[i] = slot;
-                        n48.keys[i] = @intCast(slot + 1);
-                        break;
+                .node_16 => |*n16| {
+                    // ---------------- prefix compare ----------------
+                    var i: usize = 0;
+                    while (i < n16.prefix_len and depth + i < key.len and n16.prefix[i] == key[depth + i]) : (i += 1) {}
+
+                    // prefix mismatch -> key not present
+                    if (i < n16.prefix_len) return false;
+
+                    const next_depth = depth + n16.prefix_len;
+                    const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
+
+                    // ---------------- lookup child ----------------
+                    var idx: usize = 0;
+                    while (idx < n16.num_children) : (idx += 1) {
+                        if (n16.keys[idx] == b) {
+                            // if there is no child deleted, then there was not match!
+                            // ---------------- recursive delete ----------------
+                            if (!self.deleteAt(allocator, n16.children[idx].?, key, next_depth + 1)) return false;
+
+                            // handle the case where the last child was removed
+                            if (idx == n16.num_children - 1) {
+                                n16.keys[idx] = 0;
+                                n16.children[idx] = null;
+                            } else {
+                                // shift children and keys left
+                                var j: usize = idx;
+                                while (j < n16.num_children) : (j += 1) {
+                                    // handle the case where we cannot shift left
+                                    if (j == 0) continue;
+
+                                    // shift left
+                                    n16.keys[j - 1] = n16.keys[j];
+                                    n16.children[j - 1] = n16.children[j];
+
+                                    // clean shifted slots
+                                    n16.keys[j] = 0;
+                                    n16.children[j] = null;
+                                }
+                            }
+
+                            n16.num_children -= 1;
+
+                            // ---------------- shrink / destroy ----------------
+                            if (n16.num_children <= 4) {
+                                // if there is only a single child left, shrink this Node4 into a Leaf
+                                self.shrinkNode16ToNode4(allocator, node_ptr, n16);
+                            } else if (n16.num_children == 0) {
+                                allocator.destroy(node_ptr);
+                            }
+
+                            return true;
+                        }
                     }
+
+                    // child with byte b not found -> key not present
+                    return false;
+                },
+                .node_48 => |*n48| {
+                    // ---------------- prefix compare ----------------
+                    var i: usize = 0;
+                    while (i < n48.prefix_len and depth + i < key.len and n48.prefix[i] == key[depth + i]) : (i += 1) {}
+
+                    // prefix mismatch -> key not present
+                    if (i < n48.prefix_len) return false;
+
+                    const next_depth = depth + n48.prefix_len;
+                    const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
+
+                    // ---------------- lookup child ----------------
+                    const key_idx = n48.keys[b];
+                    if (key_idx == 0) return false; // child does not exist
+
+                    const child_idx: usize = @intCast(key_idx - 1);
+                    const child_ptr = n48.children[child_idx].?;
+
+                    // ---------------- recursive delete ----------------
+                    if (!self.deleteAt(allocator, child_ptr, key, next_depth + 1)) return false;
+
+                    // clear key mapping
+                    n48.keys[b] = 0;
+
+                    // if last child, just clear slot
+                    if (child_idx == n48.num_children - 1) {
+                        n48.children[child_idx] = null;
+                    } else {
+                        // shift children left
+                        var j: usize = child_idx;
+                        while (j + 1 < n48.num_children) : (j += 1) {
+                            n48.children[j] = n48.children[j + 1];
+                        }
+                        n48.children[n48.num_children - 1] = null;
+
+                        // fix key indices that pointed past removed child
+                        var k: usize = 0;
+                        while (k < n48.keys.len) : (k += 1) {
+                            const v = n48.keys[k];
+                            if (v != 0 and v - 1 > child_idx) {
+                                n48.keys[k] = v - 1;
+                            }
+                        }
+                    }
+
+                    n48.num_children -= 1;
+
+                    // ---------------- shrink / destroy ----------------
+                    if (n48.num_children <= 16) {
+                        self.shrinkNode48ToNode16(allocator, node_ptr, n48);
+                    } else if (n48.num_children == 0) {
+                        allocator.destroy(node_ptr);
+                    }
+
+                    return true;
+                },
+                .node_256 => |*n256| {
+                    // ---------------- prefix check ----------------
+                    var i: usize = 0;
+                    while (i < n256.prefix_len and
+                        depth + i < key.len and
+                        n256.prefix[i] == key[depth + i]) : (i += 1)
+                    {}
+
+                    // prefix mismatch -> key not present
+                    if (i < n256.prefix_len) return false;
+
+                    const next_depth = depth + n256.prefix_len;
+                    const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
+
+                    // no child -> key not present
+                    const child = n256.children[b] orelse return false;
+
+                    // ---------------- recursive delete ----------------
+                    if (!self.deleteAt(allocator, child, key, next_depth + 1)) return false;
+
+                    // child was deleted -> clear slot
+                    n256.children[b] = null;
+                    n256.num_children -= 1;
+
+                    // ---------------- shrink / destroy ----------------
+                    if (n256.num_children <= 48) {
+                        self.shrinkNode256ToNode48(allocator, node_ptr, n256);
+                    } else if (n256.num_children == 0) {
+                        // should never hit this since the node always shrinks
+                        allocator.destroy(node_ptr);
+                    }
+
+                    return true;
+                },
+            }
+        }
+
+        fn shrinkNode4(_: Self, allocator: std.mem.Allocator, parent: *Node, n4: *Node4) void {
+            assert(n4.num_children == 1);
+
+            const child = n4.children[0].?;
+            switch (child.*) {
+                .leaf => {
+                    parent.* = child.*;
+                    allocator.destroy(child);
+                },
+                else => {},
+            }
+        }
+
+        fn shrinkNode16ToNode4(_: Self, allocator: std.mem.Allocator, parent: *Node, n16: *Node16) void {
+            assert(n16.num_children <= 4);
+
+            // create a new node4
+            var new_node = Node{
+                .node_4 = .{
+                    .children = [_]?*Node{null} ** 4,
+                    .keys = [_]u8{0} ** 4,
+                    .num_children = n16.num_children,
+                    .prefix = undefined,
+                    .prefix_len = 0,
+                },
+            };
+
+            const n4 = &new_node.node_4;
+
+            // copy the prefix
+            @memcpy(n4.prefix[0..n16.prefix_len], n16.prefix[0..n16.prefix_len]);
+            n4.prefix_len = n16.prefix_len;
+
+            // copy the children and keys
+            var i: usize = 0;
+            while (i < n16.num_children) : (i += 1) {
+                n4.keys[i] = n16.keys[i];
+                n4.children[i] = n16.children[i];
+            }
+
+            // destroy the n16
+            parent.* = new_node;
+            _ = allocator;
+        }
+
+        fn shrinkNode48ToNode16(
+            _: *Self,
+            allocator: std.mem.Allocator,
+            node_ptr: *Node,
+            n48: *Node48,
+        ) void {
+            // Node48 should only shrink when <= 16 children
+            assert(n48.num_children <= 16);
+
+            // Allocate new Node16
+            // const new_node = allocator.create(Node) catch unreachable;
+            var new_node = Node{
+                .node_16 = .{
+                    .prefix_len = n48.prefix_len,
+                    .prefix = n48.prefix,
+                    .num_children = n48.num_children,
+                    .keys = [_]u8{0} ** 16,
+                    .children = [_]?*Node{null} ** 16,
+                },
+            };
+
+            var n16 = &new_node.node_16;
+
+            // Rebuild Node16 from Node48
+            var out_idx: usize = 0;
+            var b: usize = 0;
+            while (b < 256) : (b += 1) {
+                const k = n48.keys[b];
+                if (k != 0) {
+                    const child_idx = @as(usize, k) - 1;
+
+                    n16.keys[out_idx] = @intCast(b);
+                    n16.children[out_idx] = n48.children[child_idx];
+                    out_idx += 1;
                 }
             }
 
-            // Clear last slot
-            n48.children[last] = null;
-            n48.num_children -= 1;
+            assert(out_idx == n16.num_children);
 
-            return removed;
+            // Replace node in place
+            node_ptr.* = new_node;
+            _ = allocator;
+            // allocator.destroy(new_node);
         }
 
-        fn removeNode256Child(n256: *Node256, b: u8) *Node {
-            const child = n256.children[b];
-            assert(child != null);
-            assert(n256.num_children > 0);
+        fn shrinkNode256ToNode48(
+            self: *Self,
+            allocator: std.mem.Allocator,
+            node_ptr: *Node,
+            n256: *Node256,
+        ) void {
+            _ = self;
+            _ = allocator;
+            // Node256 should only shrink when it fits into Node48
+            std.debug.assert(n256.num_children <= 48);
 
-            n256.children[b] = null;
-            n256.num_children -= 1;
+            // Allocate new Node48
+            // const new_node = allocator.create(Node) catch unreachable;
+            var new_node = Node{
+                .node_48 = .{
+                    .prefix_len = n256.prefix_len,
+                    .prefix = n256.prefix,
+                    .num_children = @intCast(n256.num_children),
+                    .index = [_]u8{0xFF} ** 256,
+                    .keys = [_]u8{0} ** 256,
+                    .children = [_]?*Node{null} ** 48,
+                },
+            };
 
-            return child.?;
+            var n48 = &new_node.node_48;
+
+            // Rebuild Node48 from Node256
+            var slot: usize = 0;
+            var b: usize = 0;
+            while (b < 256) : (b += 1) {
+                if (n256.children[b]) |child| {
+                    assert(slot < 48);
+
+                    n48.children[slot] = child;
+                    n48.index[b] = @intCast(slot);
+                    n48.keys[b] = @intCast(slot + 1);
+                    slot += 1;
+                }
+            }
+
+            assert(slot == n48.num_children);
+
+            // Replace node in place
+            node_ptr.* = new_node;
+            // allocator.destroy(new_node);
         }
 
         pub fn insert(self: *Self, allocator: std.mem.Allocator, key: []const u8, value: V) InsertError!void {
@@ -2176,4 +2106,79 @@ test "handle deletes from a node4 in non-linear order" {
     try testing.expectEqual(0, art.size);
 
     // try art.prettyPrint(allocator);
+}
+
+test "handle deletes from a Node16 and shrinks correctly" {
+    const allocator = testing.allocator;
+
+    var art = AdaptiveRadixTree(u32).init(allocator);
+    defer art.deinit(allocator);
+
+    var keys: std.ArrayList([]const u8) = .empty;
+    defer keys.deinit(allocator);
+
+    for (0..16) |i| {
+        const key = try allocator.alloc(u8, 2);
+        key[0] = 'a';
+        key[1] = @intCast(i);
+
+        try keys.append(allocator, key);
+        try art.insert(allocator, key, @intCast(i));
+    }
+    defer for (keys.items) |k| allocator.free(k);
+
+    for (keys.items) |k| {
+        // try art.prettyPrint(allocator);
+        try testing.expect(art.delete(allocator, k));
+    }
+}
+
+test "handle deletes from a Node48 and shrinks correctly" {
+    const allocator = testing.allocator;
+
+    var art = AdaptiveRadixTree(u32).init(allocator);
+    defer art.deinit(allocator);
+
+    var keys: std.ArrayList([]const u8) = .empty;
+    defer keys.deinit(allocator);
+
+    for (0..48) |i| {
+        const key = try allocator.alloc(u8, 2);
+        key[0] = 'a';
+        key[1] = @intCast(i);
+
+        try keys.append(allocator, key);
+        try art.insert(allocator, key, @intCast(i));
+    }
+    defer for (keys.items) |k| allocator.free(k);
+
+    for (keys.items) |k| {
+        // try art.prettyPrint(allocator);
+        try testing.expect(art.delete(allocator, k));
+    }
+}
+
+test "handle deletes from a Node256 and shrinks correctly" {
+    const allocator = testing.allocator;
+
+    var art = AdaptiveRadixTree(u32).init(allocator);
+    defer art.deinit(allocator);
+
+    var keys: std.ArrayList([]const u8) = .empty;
+    defer keys.deinit(allocator);
+
+    for (0..256) |i| {
+        const key = try allocator.alloc(u8, 2);
+        key[0] = 'a';
+        key[1] = @intCast(i);
+
+        try keys.append(allocator, key);
+        try art.insert(allocator, key, @intCast(i));
+    }
+    defer for (keys.items) |k| allocator.free(k);
+
+    for (keys.items) |k| {
+        try art.prettyPrint(allocator);
+        try testing.expect(art.delete(allocator, k));
+    }
 }
