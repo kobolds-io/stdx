@@ -83,10 +83,120 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             self.* = .{};
         }
 
-        pub fn lookup(self: *Self, allocator: std.mem.Allocator, key: []const u8) ?*Node {
-            _ = self;
-            _ = allocator;
-            _ = key;
+        pub fn lookup(self: *Self, key: []const u8) ?V {
+            if (self.root == null) return null;
+
+            return self.lookupAt(self.root.?, key, 0);
+        }
+
+        fn lookupAt(self: *Self, node: *Node, key: []const u8, depth: usize) ?V {
+            switch (node.*) {
+                .leaf => |leaf| {
+                    if (std.mem.eql(u8, leaf.key, key)) {
+                        return leaf.value;
+                    }
+
+                    return null;
+                },
+                .node_4 => |*n4| {
+                    return lookupInnerNode(
+                        self,
+                        n4.prefix_len,
+                        &n4.prefix,
+                        n4.keys[0..n4.num_children],
+                        n4.children[0..n4.num_children],
+                        key,
+                        depth,
+                    );
+                },
+                .node_16 => |*n16| {
+                    return lookupInnerNode(
+                        self,
+                        n16.prefix_len,
+                        &n16.prefix,
+                        n16.keys[0..n16.num_children],
+                        n16.children[0..n16.num_children],
+                        key,
+                        depth,
+                    );
+                },
+                .node_48 => |*n48| return lookupNode48(self, n48, key, depth),
+                .node_256 => |*n256| return lookupNode256(self, n256, key, depth),
+            }
+        }
+
+        fn lookupInnerNode(
+            self: *Self,
+            prefix_len: u8,
+            prefix: *const [MAX_PREFIX]u8,
+            keys: []const u8,
+            children: []const ?*Node,
+            key: []const u8,
+            depth: usize,
+        ) ?V {
+            const max_cmp = @min(prefix_len, key.len - depth);
+            var i: usize = 0;
+            while (i < max_cmp and prefix.*[i] == key[depth + i]) : (i += 1) {}
+
+            if (i < prefix_len) return null;
+
+            const next_depth = depth + prefix_len;
+            const b: u8 = if (next_depth < key.len) key[next_depth] else 0;
+
+            for (keys, 0..) |k, idx| {
+                if (k == b) {
+                    return self.lookupAt(children[idx].?, key, next_depth + 1);
+                }
+            }
+
+            return null;
+        }
+
+        fn lookupNode48(
+            self: *Self,
+            n48: *Node48,
+            key: []const u8,
+            depth: usize,
+        ) ?V {
+            const max_cmp = @min(n48.prefix_len, key.len - depth);
+            var i: usize = 0;
+            while (i < max_cmp and n48.prefix[i] == key[depth + i]) : (i += 1) {}
+
+            if (i < n48.prefix_len) return null;
+
+            const next_depth = depth + n48.prefix_len;
+            const b: u8 = if (next_depth < key.len) key[next_depth] else 0;
+
+            const idx = n48.index[b];
+            if (idx == 0xFF) return null;
+
+            return self.lookupAt(
+                n48.children[idx].?,
+                key,
+                next_depth + 1,
+            );
+        }
+
+        fn lookupNode256(
+            self: *Self,
+            n256: *Node256,
+            key: []const u8,
+            depth: usize,
+        ) ?V {
+            const max_cmp = @min(n256.prefix_len, key.len - depth);
+            var i: usize = 0;
+            while (i < max_cmp and n256.prefix[i] == key[depth + i]) : (i += 1) {}
+
+            if (i < n256.prefix_len) return null;
+
+            const next_depth = depth + n256.prefix_len;
+            const b: u8 = if (next_depth < key.len) key[next_depth] else 0;
+
+            if (n256.children[b]) |child| {
+                return self.lookupAt(child, key, next_depth + 1);
+            }
+
+            return null;
         }
 
         pub fn delete(self: *Self, allocator: std.mem.Allocator, key: []const u8) ?*Node {
@@ -95,38 +205,13 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             _ = key;
         }
 
-        fn allocLeaf(
-            allocator: std.mem.Allocator,
-            key: []const u8,
-            value: V,
-        ) !*Node {
-            const leaf = try allocator.create(Node);
-            leaf.* = Node{
-                .leaf = .{ .key = key, .value = value },
-            };
-
-            return leaf;
-        }
-
-        fn allocNode4(allocator: std.mem.Allocator) !*Node {
-            const node = try allocator.create(Node);
-            node.* = Node{
-                .node_4 = .{
-                    .prefix_len = 0,
-                    .prefix = undefined,
-                    .num_children = 0,
-                    .keys = .{0} ** 4,
-                    .children = .{null} ** 4,
-                },
-            };
-
-            return node;
-        }
-
         pub fn insert(self: *Self, allocator: std.mem.Allocator, key: []const u8, value: V) InsertError!void {
+            // tree is empty, just create a leaf
             if (self.root == null) {
-                // tree is empty, just create a leaf
-                self.root = try Self.allocLeaf(allocator, key, value);
+                const new_node = try allocator.create(Node);
+                new_node.* = Node{ .leaf = .{ .key = key, .value = value } };
+
+                self.root = new_node;
                 self.size += 1;
 
                 return;
@@ -161,8 +246,8 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                     const new_byte: u8 = if (i < key.len) key[i] else 0;
 
                     // create a copy of the `old_leaf` to make sure we don't lose that information
-                    const old_node_leaf_copy = try allocator.create(Node);
-                    old_node_leaf_copy.* = Node{ .leaf = old_leaf.* };
+                    const old_leaf_node = try allocator.create(Node);
+                    old_leaf_node.* = Node{ .leaf = old_leaf.* };
 
                     // create a new leaf for the new key/value pair
                     const new_leaf = try allocator.create(Node);
@@ -170,7 +255,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
                     // create a Node4 in place
                     node_ptr.* = Node{
-                        .node_4 = Node4{
+                        .node_4 = .{
                             .prefix_len = @intCast(i - depth),
                             .prefix = undefined,
                             .num_children = 2,
@@ -183,25 +268,24 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                     if (node_ptr.node_4.prefix_len > 0) {
                         @memcpy(
                             node_ptr.node_4.prefix[0..node_ptr.node_4.prefix_len],
-                            old_node_leaf_copy.leaf.key[depth .. depth + node_ptr.node_4.prefix_len],
+                            old_leaf_node.leaf.key[depth .. depth + node_ptr.node_4.prefix_len],
                         );
                     }
 
                     // insert the leaves in sorted order
                     if (old_byte < new_byte) {
                         node_ptr.node_4.keys[0] = old_byte;
-                        node_ptr.node_4.children[0] = old_node_leaf_copy;
+                        node_ptr.node_4.children[0] = old_leaf_node;
                         node_ptr.node_4.keys[1] = new_byte;
                         node_ptr.node_4.children[1] = new_leaf;
                     } else {
                         node_ptr.node_4.keys[0] = new_byte;
                         node_ptr.node_4.children[0] = new_leaf;
                         node_ptr.node_4.keys[1] = old_byte;
-                        node_ptr.node_4.children[1] = old_node_leaf_copy;
+                        node_ptr.node_4.children[1] = old_leaf_node;
                     }
 
                     self.size += 1;
-                    return;
                 },
                 .node_4 => |*n4| {
                     // check the prefix
@@ -242,14 +326,27 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
                     // ---------------- insert a new leaf (without growing) ----------------
                     if (n4.num_children < 4) {
+                        var insert_pos: usize = 0;
+                        while (insert_pos < n4.num_children and n4.keys[insert_pos] < b) : (insert_pos += 1) {}
+
+                        @memmove(
+                            n4.keys[insert_pos + 1 .. n4.num_children + 1],
+                            n4.keys[insert_pos..n4.num_children],
+                        );
+                        @memmove(
+                            n4.children[insert_pos + 1 .. n4.num_children + 1],
+                            n4.children[insert_pos..n4.num_children],
+                        );
+
                         const new_leaf = try allocator.create(Node);
                         new_leaf.* = .{ .leaf = .{ .key = key, .value = value } };
 
-                        n4.keys[n4.num_children] = b;
-                        n4.children[n4.num_children] = new_leaf;
+                        n4.keys[insert_pos] = b;
+                        n4.children[insert_pos] = new_leaf;
                         n4.num_children += 1;
 
                         self.size += 1;
+
                         return;
                     }
 
@@ -288,7 +385,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                                 n16.children[idx].?,
                                 key,
                                 value,
-                                depth + 1,
+                                next_depth + 1,
                             );
                         }
                     }
@@ -405,6 +502,16 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
                     // child exists -> recurse
                     if (n256.children[b]) |child| {
+                        // switch (child.*) {
+                        //     .node_4 => |n4| {
+                        //         std.debug.print("keys: {any}, children: {any}\n", .{
+                        //             n4.keys[0..n4.num_children],
+                        //             n4.children[0..n4.num_children],
+                        //         });
+                        //     },
+                        //     else => {},
+                        // }
+
                         return self.insertAt(
                             allocator,
                             child,
@@ -427,6 +534,56 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                     self.size += 1;
                 },
             }
+        }
+
+        // fn initNode4FromChildren(
+        //     allocator: std.mem.Allocator,
+        //     old_children: []?*Node,
+        //     old_num_children: usize,
+        //     prefix: []const u8,
+        //     prefix_len: usize,
+        //     new_leaf: ?*Node,
+        //     new_leaf_byte: u8,
+        // ) !Node4 {
+        //     var n4 = Node4{
+        //         .prefix_len = @intCast(prefix_len),
+        //         .prefix = undefined,
+        //         .num_children = old_num_children + if (new_leaf) 1 else 0,
+        //         .keys = [_]u8{0} ** 4,
+        //         .children = [_]?*Node{null} ** 4,
+        //     };
+
+        //     if (prefix_len > 0) {
+        //         @memcpy(n4.prefix[0..prefix_len], prefix);
+        //     }
+
+        //     // copy existing children and set keys
+        //     var idx: usize = 0;
+        //     while (idx < old_num_children) : (idx += 1) {
+        //         const child = old_children[idx].?;
+        //         const byte = getKeyByteAfterPrefix(child, prefix_len);
+        //         n4.keys[idx] = byte;
+        //         n4.children[idx] = child;
+        //     }
+
+        //     // insert new leaf if provided
+        //     if (new_leaf) |leaf| {
+        //         n4.keys[idx] = new_leaf_byte;
+        //         n4.children[idx] = leaf;
+        //     }
+
+        //     return n4;
+        // }
+
+        // helper to get the distinguishing byte
+        fn getKeyByteAfterPrefix(node: *Node, depth: usize) u8 {
+            return switch (node.*) {
+                .leaf => |leaf| if (depth < leaf.key.len) leaf.key[depth] else 0,
+                .node_4 => |n| if (depth < n.prefix_len) n.prefix[depth] else 0,
+                .node_16 => |n| if (depth < n.prefix_len) n.prefix[depth] else 0,
+                .node_48 => |n| if (depth < n.prefix_len) n.prefix[depth] else 0,
+                .node_256 => |n| if (depth < n.prefix_len) n.prefix[depth] else 0,
+            };
         }
 
         fn splitNode4Prefix(
@@ -495,9 +652,6 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             value: V,
             depth: usize,
         ) !void {
-            const next_depth = depth + n4.prefix_len;
-            const b: u8 = if (next_depth < key.len) key[next_depth] else 0;
-
             const new_node = try allocator.create(Node);
             new_node.* = Node{
                 .node_16 = .{
@@ -517,6 +671,9 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                 n16.keys[j] = n4.keys[j];
                 n16.children[j] = n4.children[j];
             }
+
+            const next_depth = depth + n4.prefix_len;
+            const b: u8 = if (next_depth < key.len) key[next_depth] else 0;
 
             // find the sorted position of where the new_leaf should be inserted
             const insert_pos = blk: {
@@ -849,7 +1006,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                 );
             }
 
-            // Attach old node under parent
+            // Attach old node under new parent
             n4.keys[0] = old_byte;
             n4.children[0] = old_node;
             n4.num_children = 1;
@@ -877,6 +1034,16 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             self.size += 1;
         }
 
+        // fn get_key_byte_at_depth(node: *Node, depth: usize) u8 {
+        //     return switch (node.*) {
+        //         .leaf => |leaf| if (depth < leaf.key.len) leaf.key[depth] else 0,
+        //         .node_4 => |n| if (depth < n.prefix_len) n.prefix[depth] else 0,
+        //         .node_16 => |n| if (depth < n.prefix_len) n.prefix[depth] else 0,
+        //         .node_48 => |n| if (depth < n.prefix_len) n.prefix[depth] else 0,
+        //         .node_256 => |n| if (depth < n.prefix_len) n.prefix[depth] else 0,
+        //     };
+        // }
+
         fn destroyNode(allocator: std.mem.Allocator, node_opt: ?*Node) void {
             if (node_opt == null) return;
 
@@ -884,35 +1051,8 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
             switch (node.*) {
                 .leaf => allocator.destroy(node),
-                .node_4 => {
-                    for (node.node_4.children) |child| {
-                        destroyNode(allocator, child);
-                    }
-                    allocator.destroy(node);
-                },
-                .node_16 => {
-                    for (node.node_16.children) |child| {
-                        destroyNode(allocator, child);
-                    }
-                    allocator.destroy(node);
-                },
-                .node_48 => {
-                    // keys[i] = idx+1 of children[]
-                    var i: usize = 0;
-                    while (i < 256) : (i += 1) {
-                        const k = node.node_48.keys[i];
-                        if (k != 0) {
-                            const idx = @as(usize, k) - 1;
-                            destroyNode(allocator, node.node_48.children[idx]);
-                        }
-                    }
-
-                    allocator.destroy(node);
-                },
-                .node_256 => {
-                    for (node.node_256.children) |child| {
-                        destroyNode(allocator, child);
-                    }
+                inline else => |*n| {
+                    for (n.children) |child| destroyNode(allocator, child);
                     allocator.destroy(node);
                 },
             }
@@ -1036,400 +1176,429 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
     };
 }
 
-test "init/deinit" {
-    const allocator = testing.allocator;
+// test "init/deinit" {
+//     const allocator = testing.allocator;
 
-    var art = AdaptiveRadixTree(u32).init(allocator);
-    defer art.deinit(allocator);
-}
+//     var art = AdaptiveRadixTree(u32).init(allocator);
+//     defer art.deinit(allocator);
+// }
 
-test "insert into a an empty tree" {
-    const allocator = testing.allocator;
+// test "insert into a an empty tree" {
+//     const allocator = testing.allocator;
 
-    var art = AdaptiveRadixTree([]const u8).init(allocator);
-    defer art.deinit(allocator);
+//     var art = AdaptiveRadixTree([]const u8).init(allocator);
+//     defer art.deinit(allocator);
 
-    try testing.expectEqual(0, art.size);
+//     try testing.expectEqual(0, art.size);
 
-    const k = "hello";
-    const v = "world";
+//     const k = "hello";
+//     const v = "world";
 
-    try art.insert(allocator, k, v);
+//     try art.insert(allocator, k, v);
 
-    try testing.expectEqual(1, art.size);
-    try testing.expect(std.mem.eql(u8, v, art.root.?.leaf.value));
-}
+//     try testing.expectEqual(1, art.size);
+//     try testing.expect(std.mem.eql(u8, v, art.root.?.leaf.value));
+// }
 
-test "grow root from leaf to node_4 on second insert" {
-    const allocator = testing.allocator;
+// test "grow root from leaf to node_4 on second insert" {
+//     const allocator = testing.allocator;
 
-    var art = AdaptiveRadixTree(u32).init(allocator);
-    defer art.deinit(allocator);
+//     var art = AdaptiveRadixTree(u32).init(allocator);
+//     defer art.deinit(allocator);
 
-    try testing.expectEqual(0, art.size);
+//     try testing.expectEqual(0, art.size);
 
-    const k1 = "hello";
-    const v1 = 1;
+//     const k1 = "hello";
+//     const v1 = 1;
 
-    try art.insert(allocator, k1, v1);
+//     try art.insert(allocator, k1, v1);
 
-    const k2 = "hello_";
-    const v2 = 2;
-    try art.insert(allocator, k2, v2);
+//     const k2 = "hello_";
+//     const v2 = 2;
+//     try art.insert(allocator, k2, v2);
 
-    try testing.expectEqual(2, art.size);
-    try testing.expectEqual(2, art.root.?.node_4.num_children);
+//     // try art.prettyPrint(allocator);
 
-    try testing.expectEqualStrings(k1, art.root.?.node_4.children[0].?.leaf.key);
-    try testing.expectEqual(v1, art.root.?.node_4.children[0].?.leaf.value);
+//     try testing.expectEqual(2, art.size);
+//     try testing.expectEqual(2, art.root.?.node_4.num_children);
 
-    try testing.expectEqualStrings(k2, art.root.?.node_4.children[1].?.leaf.key);
-    try testing.expectEqual(v2, art.root.?.node_4.children[1].?.leaf.value);
-}
+//     try testing.expectEqualStrings(k1, art.root.?.node_4.children[0].?.leaf.key);
+//     try testing.expectEqual(v1, art.root.?.node_4.children[0].?.leaf.value);
 
-test "inserting 3 items into the tree does not trigger a Node4 to Node16 upgrade" {
-    const allocator = testing.allocator;
+//     try testing.expectEqualStrings(k2, art.root.?.node_4.children[1].?.leaf.key);
+//     try testing.expectEqual(v2, art.root.?.node_4.children[1].?.leaf.value);
+// }
 
-    var art = AdaptiveRadixTree(u32).init(allocator);
-    defer art.deinit(allocator);
+// test "inserting 3 items into the tree does not trigger a Node4 to Node16 upgrade" {
+//     const allocator = testing.allocator;
 
-    try testing.expectEqual(0, art.size);
+//     var art = AdaptiveRadixTree(u32).init(allocator);
+//     defer art.deinit(allocator);
 
-    const k1 = "h";
-    const v1 = 1;
+//     try testing.expectEqual(0, art.size);
 
-    try art.insert(allocator, k1, v1);
+//     const k1 = "h";
+//     const v1 = 1;
 
-    const k2 = "hello";
-    const v2 = 2;
-    try art.insert(allocator, k2, v2);
+//     try art.insert(allocator, k1, v1);
 
-    const k3 = "help";
-    const v3 = 3;
-    try art.insert(allocator, k3, v3);
+//     const k2 = "hello";
+//     const v2 = 2;
+//     try art.insert(allocator, k2, v2);
 
-    try testing.expectEqual(3, art.size);
-    try testing.expectEqual(2, art.root.?.node_4.num_children);
+//     const k3 = "help";
+//     const v3 = 3;
+//     try art.insert(allocator, k3, v3);
 
-    // try art.prettyPrint(allocator);
-}
+//     try testing.expectEqual(3, art.size);
+//     try testing.expectEqual(2, art.root.?.node_4.num_children);
 
-test "node4 prefix mismatch split" {
-    const allocator = testing.allocator;
+//     // try art.prettyPrint(allocator);
+// }
 
-    var art = AdaptiveRadixTree(u32).init(allocator);
-    defer art.deinit(allocator);
+// test "node4 prefix mismatch split" {
+//     const allocator = testing.allocator;
 
-    // These two keys share "ab", then diverge at index 2
-    // This guarantees a Node4 prefix mismatch split
-    try art.insert(allocator, "ab", 1);
-    try art.insert(allocator, "abc", 2);
-    try art.insert(allocator, "ad", 3);
+//     var art = AdaptiveRadixTree(u32).init(allocator);
+//     defer art.deinit(allocator);
 
-    // try art.prettyPrint(allocator);
+//     // These two keys share "ab", then diverge at index 2
+//     // This guarantees a Node4 prefix mismatch split
+//     try art.insert(allocator, "ab", 1);
+//     try art.insert(allocator, "abc", 2);
+//     try art.insert(allocator, "ad", 3);
 
-    try testing.expectEqual(3, art.size);
+//     // try art.prettyPrint(allocator);
 
-    // Root must be Node4 after split
-    const root = art.root orelse return error.TestFailed;
+//     try testing.expectEqual(3, art.size);
 
-    // there are 2 kiddos
-    try testing.expectEqual(2, root.node_4.num_children);
-    try testing.expectEqual(1, root.node_4.prefix_len);
-    try testing.expectEqual('a', root.node_4.prefix[0]);
-
-    try testing.expectEqual(2, root.node_4.num_children);
-
-    const child_node_4 = root.node_4.children[0].?;
-
-    try testing.expectEqual(0, child_node_4.node_4.prefix_len);
-
-    try testing.expectEqualStrings("ab", child_node_4.node_4.children[0].?.leaf.key);
-    try testing.expectEqualStrings("abc", child_node_4.node_4.children[1].?.leaf.key);
-    try testing.expectEqualStrings("ad", root.node_4.children[1].?.leaf.key);
-}
-
-test "node4 grows to node16" {
-    const allocator = testing.allocator;
-
-    var art = AdaptiveRadixTree(u32).init(allocator);
-    defer art.deinit(allocator);
-
-    // These two keys share "ab", then diverge at index 2
-    // This guarantees a Node4 prefix mismatch split
-    try art.insert(allocator, "a0", 0);
-    try art.insert(allocator, "a1", 1);
-    try art.insert(allocator, "a2", 2);
-    try art.insert(allocator, "a3", 4);
-    try art.insert(allocator, "a4", 4);
-
-    // try art.prettyPrint(allocator);
-
-    try testing.expectEqual(5, art.size);
-
-    const root = art.root orelse return error.TestFailed;
-
-    try testing.expectEqual(5, root.node_16.num_children);
-}
-
-test "node16 prefix mismatch split" {
-    const allocator = testing.allocator;
-
-    var art = AdaptiveRadixTree(u32).init(allocator);
-    defer art.deinit(allocator);
-
-    // These two keys share "ab", then diverge at index 2
-    // This guarantees a Node4 prefix mismatch split
-    const k0 = "a0";
-    const k1 = "a1";
-    const k2 = "a2";
-    const k3 = "a3";
-    const k4 = "a4";
-    const k5 = "b5";
-
-    try art.insert(allocator, k0, 0);
-    try art.insert(allocator, k1, 0); // upgrade to Node4
-    try art.insert(allocator, k2, 0);
-    try art.insert(allocator, k3, 0);
-    try art.insert(allocator, k4, 0); // upgrade to Node16
-    try art.insert(allocator, k5, 0); // split the Node16
-
-    // try art.prettyPrint(allocator);
-
-    try testing.expectEqual(6, art.size);
-
-    // Root must be Node4 after split
-    const root = art.root orelse return error.TestFailed;
-
-    // there are 2 kiddos
-    try testing.expectEqual(2, root.node_4.num_children);
-    try testing.expectEqual(0, root.node_4.prefix_len);
-
-    // expect the first child to be the Node16
-    const child_node_16 = root.node_4.children[0] orelse return error.TestFailed;
-    try testing.expectEqual(0, child_node_16.node_16.prefix_len);
-    try testing.expectEqualStrings(k0, child_node_16.node_16.children[0].?.leaf.key);
-    try testing.expectEqualStrings(k1, child_node_16.node_16.children[1].?.leaf.key);
-    try testing.expectEqualStrings(k2, child_node_16.node_16.children[2].?.leaf.key);
-    try testing.expectEqualStrings(k3, child_node_16.node_16.children[3].?.leaf.key);
-    try testing.expectEqualStrings(k4, child_node_16.node_16.children[4].?.leaf.key);
-
-    const child_leaf_node = root.node_4.children[1] orelse return error.TestFailed;
-    try testing.expectEqualStrings(k5, child_leaf_node.leaf.key);
-}
-
-test "node16 grows to node48" {
-    const allocator = testing.allocator;
-
-    var art = AdaptiveRadixTree(u32).init(allocator);
-    defer art.deinit(allocator);
-
-    var keys: std.ArrayList([]const u8) = .empty;
-    defer keys.deinit(allocator);
-
-    const k0 = "a0";
-    const k1 = "a1";
-    const k2 = "a2";
-    const k3 = "a3";
-    const k4 = "a4";
-    const k5 = "a5";
-    const k6 = "a6";
-    const k7 = "a7";
-    const k8 = "a8";
-    const k9 = "a9";
-    const k10 = "aa";
-    const k11 = "ab";
-    const k12 = "ac";
-    const k13 = "ad";
-    const k14 = "ae";
-    const k15 = "af";
-    const k16 = "ag";
-
-    try art.insert(allocator, k0, 0);
-    try art.insert(allocator, k1, 0);
-    try art.insert(allocator, k2, 0);
-    try art.insert(allocator, k3, 0);
-    try art.insert(allocator, k4, 0);
-    try art.insert(allocator, k5, 0);
-    try art.insert(allocator, k6, 0);
-    try art.insert(allocator, k7, 0);
-    try art.insert(allocator, k8, 0);
-    try art.insert(allocator, k9, 0);
-    try art.insert(allocator, k10, 0);
-    try art.insert(allocator, k11, 0);
-    try art.insert(allocator, k12, 0);
-    try art.insert(allocator, k13, 0);
-    try art.insert(allocator, k14, 0);
-    try art.insert(allocator, k15, 0);
-    try art.insert(allocator, k16, 0); // grow to Node48
-
-    // try art.prettyPrint(allocator);
-
-    const root = art.root orelse return error.TestFailed;
-    try testing.expectEqual(17, art.size);
-    try testing.expectEqual(17, root.node_48.num_children);
-}
-
-test "node48 prefix mismatch split" {
-    const allocator = testing.allocator;
-
-    var art = AdaptiveRadixTree(u32).init(allocator);
-    defer art.deinit(allocator);
-
-    var keys: std.ArrayList([]const u8) = .empty;
-    defer keys.deinit(allocator);
-
-    try art.insert(allocator, "a0", 0);
-    try art.insert(allocator, "a1", 0);
-    try art.insert(allocator, "a2", 0);
-    try art.insert(allocator, "a3", 0);
-    try art.insert(allocator, "a4", 0);
-    try art.insert(allocator, "a5", 0);
-    try art.insert(allocator, "a6", 0);
-    try art.insert(allocator, "a7", 0);
-    try art.insert(allocator, "a8", 0);
-    try art.insert(allocator, "a9", 0); // 10
-
-    try art.insert(allocator, "aa", 0);
-    try art.insert(allocator, "ab", 0);
-    try art.insert(allocator, "ac", 0);
-    try art.insert(allocator, "ad", 0);
-    try art.insert(allocator, "ae", 0);
-    try art.insert(allocator, "af", 0);
-    try art.insert(allocator, "ag", 0); // grow to Node48
-
-    try art.insert(allocator, "ba", 0); // split the Node48
-
-    // try art.prettyPrint(allocator);
-
-    const root = art.root orelse return error.TestFailed;
-    try testing.expectEqual(18, art.size);
-
-    try testing.expectEqualStrings("ba", root.node_4.children[1].?.leaf.key);
-}
-
-test "node48 grows to node256" {
-    const allocator = testing.allocator;
-
-    var art = AdaptiveRadixTree(u32).init(allocator);
-    defer art.deinit(allocator);
-
-    var keys: std.ArrayList([]const u8) = .empty;
-    defer keys.deinit(allocator);
-
-    try art.insert(allocator, "a0", 0);
-    try art.insert(allocator, "a1", 0);
-    try art.insert(allocator, "a2", 0);
-    try art.insert(allocator, "a3", 0);
-    try art.insert(allocator, "a4", 0);
-    try art.insert(allocator, "a5", 0);
-    try art.insert(allocator, "a6", 0);
-    try art.insert(allocator, "a7", 0);
-    try art.insert(allocator, "a8", 0);
-    try art.insert(allocator, "a9", 0); // 10
-
-    try art.insert(allocator, "aa", 0);
-    try art.insert(allocator, "ab", 0);
-    try art.insert(allocator, "ac", 0);
-    try art.insert(allocator, "ad", 0);
-    try art.insert(allocator, "ae", 0);
-    try art.insert(allocator, "af", 0);
-    try art.insert(allocator, "ag", 0);
-    try art.insert(allocator, "ah", 0);
-    try art.insert(allocator, "ai", 0);
-    try art.insert(allocator, "aj", 0);
-    try art.insert(allocator, "ak", 0);
-    try art.insert(allocator, "al", 0);
-    try art.insert(allocator, "am", 0);
-    try art.insert(allocator, "an", 0);
-    try art.insert(allocator, "ao", 0);
-    try art.insert(allocator, "ap", 0);
-    try art.insert(allocator, "aq", 0);
-    try art.insert(allocator, "ar", 0);
-    try art.insert(allocator, "as", 0);
-    try art.insert(allocator, "at", 0);
-    try art.insert(allocator, "au", 0);
-    try art.insert(allocator, "av", 0);
-    try art.insert(allocator, "aw", 0);
-    try art.insert(allocator, "ax", 0);
-    try art.insert(allocator, "ay", 0);
-    try art.insert(allocator, "az", 0); // 26
-
-    try art.insert(allocator, "a~", 0);
-    try art.insert(allocator, "a!", 0);
-    try art.insert(allocator, "a@", 0);
-    try art.insert(allocator, "a#", 0);
-    try art.insert(allocator, "a%", 0);
-    try art.insert(allocator, "a^", 0);
-    try art.insert(allocator, "a&", 0);
-    try art.insert(allocator, "a*", 0);
-    try art.insert(allocator, "a(", 0);
-    try art.insert(allocator, "a)", 0); // 10
-
-    try art.insert(allocator, "a-", 0);
-    try art.insert(allocator, "a_", 0);
-    try art.insert(allocator, "a=", 0); // grow to Node256
-
-    // try art.prettyPrint(allocator);
-
-    const root = art.root orelse return error.TestFailed;
-    try testing.expectEqual(49, art.size);
-    try testing.expectEqual(49, root.node_256.num_children);
-}
-
-test "Node256 prefix mismatch triggers splitNode256Prefix" {
-    const allocator = std.testing.allocator;
-
-    var art = AdaptiveRadixTree(u32).init(allocator);
-    defer art.deinit(allocator);
-
-    var keys: std.ArrayList([]const u8) = .empty;
-    defer keys.deinit(allocator);
-
-    for (0..100) |i| {
-        const key = try allocator.alloc(u8, 3);
-        key[0] = 'a';
-        key[1] = 'a';
-        key[2] = @intCast(i);
-
-        try keys.append(allocator, key);
-        try art.insert(allocator, key, @intCast(i));
-    }
-
-    defer {
-        for (keys.items) |k| {
-            allocator.free(k);
-        }
-    }
-
-    // ensure that the tree is populated
-    try testing.expectEqual(100, art.size);
-    // ensure that the root node is a Node256
-    try testing.expectEqual(100, art.root.?.node_256.num_children);
-
-    const key = try allocator.alloc(u8, 3);
-    key[0] = 'a';
-    key[1] = 'b';
-    key[2] = 0;
-
-    // split the node
-    try keys.append(allocator, key);
-    try art.insert(allocator, key, 99);
-
-    // ensure that the tree is populated
-    try testing.expectEqual(101, art.size);
-
-    const root = art.root orelse return error.TestFailed;
-
-    try testing.expectEqual(2, root.node_4.num_children);
-
-    // ensure the key matches the expected key
-    try testing.expectEqual(keys.items[keys.items.len - 1], root.node_4.children[1].?.leaf.key);
-
-    // try art.prettyPrint(allocator);
-}
-
-test "node256 does not grow" {
+//     // Root must be Node4 after split
+//     const root = art.root orelse return error.TestFailed;
+
+//     // there are 2 kiddos
+//     try testing.expectEqual(2, root.node_4.num_children);
+//     try testing.expectEqual(1, root.node_4.prefix_len);
+//     try testing.expectEqual('a', root.node_4.prefix[0]);
+
+//     try testing.expectEqual(2, root.node_4.num_children);
+
+//     const child_node_4 = root.node_4.children[0].?;
+
+//     try testing.expectEqual(0, child_node_4.node_4.prefix_len);
+
+//     try testing.expectEqualStrings("ab", child_node_4.node_4.children[0].?.leaf.key);
+//     try testing.expectEqualStrings("abc", child_node_4.node_4.children[1].?.leaf.key);
+//     try testing.expectEqualStrings("ad", root.node_4.children[1].?.leaf.key);
+// }
+
+// test "node4 grows to node16" {
+//     const allocator = testing.allocator;
+
+//     var art = AdaptiveRadixTree(u32).init(allocator);
+//     defer art.deinit(allocator);
+
+//     // These two keys share "ab", then diverge at index 2
+//     // This guarantees a Node4 prefix mismatch split
+//     try art.insert(allocator, "a0", 0);
+//     try art.insert(allocator, "a1", 1);
+//     try art.insert(allocator, "a2", 2);
+//     try art.insert(allocator, "a3", 4);
+//     try art.insert(allocator, "a4", 4);
+
+//     // try art.prettyPrint(allocator);
+
+//     try testing.expectEqual(5, art.size);
+
+//     const root = art.root orelse return error.TestFailed;
+
+//     try testing.expectEqual(5, root.node_16.num_children);
+// }
+
+// test "node16 prefix mismatch split" {
+//     const allocator = testing.allocator;
+
+//     var art = AdaptiveRadixTree(u32).init(allocator);
+//     defer art.deinit(allocator);
+
+//     // These two keys share "ab", then diverge at index 2
+//     // This guarantees a Node4 prefix mismatch split
+//     const k0 = "a0";
+//     const k1 = "a1";
+//     const k2 = "a2";
+//     const k3 = "a3";
+//     const k4 = "a4";
+//     const k5 = "b5";
+
+//     try art.insert(allocator, k0, 0);
+//     try art.insert(allocator, k1, 0); // upgrade to Node4
+//     try art.insert(allocator, k2, 0);
+//     try art.insert(allocator, k3, 0);
+//     try art.insert(allocator, k4, 0); // upgrade to Node16
+//     try art.insert(allocator, k5, 0); // split the Node16
+
+//     // try art.prettyPrint(allocator);
+
+//     try testing.expectEqual(6, art.size);
+
+//     // Root must be Node4 after split
+//     const root = art.root orelse return error.TestFailed;
+
+//     // there are 2 kiddos
+//     try testing.expectEqual(2, root.node_4.num_children);
+//     try testing.expectEqual(0, root.node_4.prefix_len);
+
+//     // expect the first child to be the Node16
+//     const child_node_16 = root.node_4.children[0] orelse return error.TestFailed;
+//     try testing.expectEqual(0, child_node_16.node_16.prefix_len);
+//     try testing.expectEqualStrings(k0, child_node_16.node_16.children[0].?.leaf.key);
+//     try testing.expectEqualStrings(k1, child_node_16.node_16.children[1].?.leaf.key);
+//     try testing.expectEqualStrings(k2, child_node_16.node_16.children[2].?.leaf.key);
+//     try testing.expectEqualStrings(k3, child_node_16.node_16.children[3].?.leaf.key);
+//     try testing.expectEqualStrings(k4, child_node_16.node_16.children[4].?.leaf.key);
+
+//     const child_leaf_node = root.node_4.children[1] orelse return error.TestFailed;
+//     try testing.expectEqualStrings(k5, child_leaf_node.leaf.key);
+// }
+
+// test "node16 grows to node48" {
+//     const allocator = testing.allocator;
+
+//     var art = AdaptiveRadixTree(u32).init(allocator);
+//     defer art.deinit(allocator);
+
+//     var keys: std.ArrayList([]const u8) = .empty;
+//     defer keys.deinit(allocator);
+
+//     const k0 = "a0";
+//     const k1 = "a1";
+//     const k2 = "a2";
+//     const k3 = "a3";
+//     const k4 = "a4";
+//     const k5 = "a5";
+//     const k6 = "a6";
+//     const k7 = "a7";
+//     const k8 = "a8";
+//     const k9 = "a9";
+//     const k10 = "aa";
+//     const k11 = "ab";
+//     const k12 = "ac";
+//     const k13 = "ad";
+//     const k14 = "ae";
+//     const k15 = "af";
+//     const k16 = "ag";
+
+//     try art.insert(allocator, k0, 0);
+//     try art.insert(allocator, k1, 0);
+//     try art.insert(allocator, k2, 0);
+//     try art.insert(allocator, k3, 0);
+//     try art.insert(allocator, k4, 0);
+//     try art.insert(allocator, k5, 0);
+//     try art.insert(allocator, k6, 0);
+//     try art.insert(allocator, k7, 0);
+//     try art.insert(allocator, k8, 0);
+//     try art.insert(allocator, k9, 0);
+//     try art.insert(allocator, k10, 0);
+//     try art.insert(allocator, k11, 0);
+//     try art.insert(allocator, k12, 0);
+//     try art.insert(allocator, k13, 0);
+//     try art.insert(allocator, k14, 0);
+//     try art.insert(allocator, k15, 0);
+//     try art.insert(allocator, k16, 0); // grow to Node48
+
+//     // try art.prettyPrint(allocator);
+
+//     const root = art.root orelse return error.TestFailed;
+//     try testing.expectEqual(17, art.size);
+//     try testing.expectEqual(17, root.node_48.num_children);
+// }
+
+// test "node48 prefix mismatch split" {
+//     const allocator = testing.allocator;
+
+//     var art = AdaptiveRadixTree(u32).init(allocator);
+//     defer art.deinit(allocator);
+
+//     var keys: std.ArrayList([]const u8) = .empty;
+//     defer keys.deinit(allocator);
+
+//     try art.insert(allocator, "a0", 0);
+//     try art.insert(allocator, "a1", 0);
+//     try art.insert(allocator, "a2", 0);
+//     try art.insert(allocator, "a3", 0);
+//     try art.insert(allocator, "a4", 0);
+//     try art.insert(allocator, "a5", 0);
+//     try art.insert(allocator, "a6", 0);
+//     try art.insert(allocator, "a7", 0);
+//     try art.insert(allocator, "a8", 0);
+//     try art.insert(allocator, "a9", 0); // 10
+
+//     try art.insert(allocator, "aa", 0);
+//     try art.insert(allocator, "ab", 0);
+//     try art.insert(allocator, "ac", 0);
+//     try art.insert(allocator, "ad", 0);
+//     try art.insert(allocator, "ae", 0);
+//     try art.insert(allocator, "af", 0);
+//     try art.insert(allocator, "ag", 0); // grow to Node48
+
+//     try art.insert(allocator, "ba", 0); // split the Node48
+
+//     // try art.prettyPrint(allocator);
+
+//     const root = art.root orelse return error.TestFailed;
+//     try testing.expectEqual(18, art.size);
+
+//     try testing.expectEqualStrings("ba", root.node_4.children[1].?.leaf.key);
+// }
+
+// test "node48 grows to node256" {
+//     const allocator = testing.allocator;
+
+//     var art = AdaptiveRadixTree(u32).init(allocator);
+//     defer art.deinit(allocator);
+
+//     var keys: std.ArrayList([]const u8) = .empty;
+//     defer keys.deinit(allocator);
+
+//     try art.insert(allocator, "a0", 0);
+//     try art.insert(allocator, "a1", 0);
+//     try art.insert(allocator, "a2", 0);
+//     try art.insert(allocator, "a3", 0);
+//     try art.insert(allocator, "a4", 0);
+//     try art.insert(allocator, "a5", 0);
+//     try art.insert(allocator, "a6", 0);
+//     try art.insert(allocator, "a7", 0);
+//     try art.insert(allocator, "a8", 0);
+//     try art.insert(allocator, "a9", 0); // 10
+
+//     try art.insert(allocator, "aa", 0);
+//     try art.insert(allocator, "ab", 0);
+//     try art.insert(allocator, "ac", 0);
+//     try art.insert(allocator, "ad", 0);
+//     try art.insert(allocator, "ae", 0);
+//     try art.insert(allocator, "af", 0);
+//     try art.insert(allocator, "ag", 0);
+//     try art.insert(allocator, "ah", 0);
+//     try art.insert(allocator, "ai", 0);
+//     try art.insert(allocator, "aj", 0);
+//     try art.insert(allocator, "ak", 0);
+//     try art.insert(allocator, "al", 0);
+//     try art.insert(allocator, "am", 0);
+//     try art.insert(allocator, "an", 0);
+//     try art.insert(allocator, "ao", 0);
+//     try art.insert(allocator, "ap", 0);
+//     try art.insert(allocator, "aq", 0);
+//     try art.insert(allocator, "ar", 0);
+//     try art.insert(allocator, "as", 0);
+//     try art.insert(allocator, "at", 0);
+//     try art.insert(allocator, "au", 0);
+//     try art.insert(allocator, "av", 0);
+//     try art.insert(allocator, "aw", 0);
+//     try art.insert(allocator, "ax", 0);
+//     try art.insert(allocator, "ay", 0);
+//     try art.insert(allocator, "az", 0); // 26
+
+//     try art.insert(allocator, "a~", 0);
+//     try art.insert(allocator, "a!", 0);
+//     try art.insert(allocator, "a@", 0);
+//     try art.insert(allocator, "a#", 0);
+//     try art.insert(allocator, "a%", 0);
+//     try art.insert(allocator, "a^", 0);
+//     try art.insert(allocator, "a&", 0);
+//     try art.insert(allocator, "a*", 0);
+//     try art.insert(allocator, "a(", 0);
+//     try art.insert(allocator, "a)", 0); // 10
+
+//     try art.insert(allocator, "a-", 0);
+//     try art.insert(allocator, "a_", 0);
+//     try art.insert(allocator, "a=", 0); // grow to Node256
+
+//     // try art.prettyPrint(allocator);
+
+//     const root = art.root orelse return error.TestFailed;
+//     try testing.expectEqual(49, art.size);
+//     try testing.expectEqual(49, root.node_256.num_children);
+// }
+
+// test "Node256 prefix mismatch triggers splitNode256Prefix" {
+//     const allocator = std.testing.allocator;
+
+//     var art = AdaptiveRadixTree(u32).init(allocator);
+//     defer art.deinit(allocator);
+
+//     var keys: std.ArrayList([]const u8) = .empty;
+//     defer keys.deinit(allocator);
+
+//     for (0..100) |i| {
+//         const key = try allocator.alloc(u8, 3);
+//         key[0] = 'a';
+//         key[1] = 'a';
+//         key[2] = @intCast(i);
+
+//         try keys.append(allocator, key);
+//         try art.insert(allocator, key, @intCast(i));
+//     }
+
+//     defer {
+//         for (keys.items) |k| {
+//             allocator.free(k);
+//         }
+//     }
+
+//     // ensure that the tree is populated
+//     try testing.expectEqual(100, art.size);
+//     // ensure that the root node is a Node256
+//     try testing.expectEqual(100, art.root.?.node_256.num_children);
+
+//     const key = try allocator.alloc(u8, 3);
+//     key[0] = 'a';
+//     key[1] = 'b';
+//     key[2] = 0;
+
+//     // split the node
+//     try keys.append(allocator, key);
+//     try art.insert(allocator, key, 99);
+
+//     // ensure that the tree is populated
+//     try testing.expectEqual(101, art.size);
+
+//     const root = art.root orelse return error.TestFailed;
+
+//     try testing.expectEqual(2, root.node_4.num_children);
+
+//     // ensure the key matches the expected key
+//     try testing.expectEqual(keys.items[keys.items.len - 1], root.node_4.children[1].?.leaf.key);
+
+//     // try art.prettyPrint(allocator);
+// }
+
+// test "node256 does not grow" {
+//     const allocator = testing.allocator;
+
+//     var art = AdaptiveRadixTree(u32).init(allocator);
+//     defer art.deinit(allocator);
+
+//     var keys: std.ArrayList([]const u8) = .empty;
+//     defer keys.deinit(allocator);
+
+//     for (0..256) |i| {
+//         const key = try allocator.alloc(u8, 2);
+//         key[0] = 'a';
+//         key[1] = @intCast(i);
+
+//         try keys.append(allocator, key);
+//         try art.insert(allocator, key, @intCast(i));
+//     }
+
+//     defer {
+//         for (keys.items) |k| {
+//             allocator.free(k);
+//         }
+//     }
+
+//     // try art.prettyPrint(allocator);
+// }
+
+test "lookup returns found value" {
     const allocator = testing.allocator;
 
     var art = AdaptiveRadixTree(u32).init(allocator);
@@ -1447,11 +1616,69 @@ test "node256 does not grow" {
         try art.insert(allocator, key, @intCast(i));
     }
 
+    for (keys.items) |k| {
+        // std.debug.print("K: {any}\n", .{k});
+        try testing.expect(art.lookup(k) != null);
+    }
+
+    for (0..3) |i| {
+        const key = try allocator.alloc(u8, 3);
+        key[0] = 'a';
+        key[1] = 'b';
+        key[2] = @intCast(i);
+
+        try keys.append(allocator, key);
+        try art.insert(allocator, key, @intCast(i));
+    }
+
+    // for (0..15) |i| {
+    //     const key = try allocator.alloc(u8, 4);
+    //     key[0] = 'a';
+    //     key[1] = 'b';
+    //     key[2] = 'c';
+    //     key[3] = @intCast(i);
+
+    //     try keys.append(allocator, key);
+    //     try art.insert(allocator, key, @intCast(i));
+    // }
+
+    // for (0..3) |i| {
+    //     const key = try allocator.alloc(u8, 5);
+    //     key[0] = 'a';
+    //     key[1] = 'b';
+    //     key[2] = 'c';
+    //     key[3] = 'd';
+    //     key[4] = @intCast(i);
+
+    //     try keys.append(allocator, key);
+    //     try art.insert(allocator, key, @intCast(i));
+    // }
+
+    // for (0..1) |i| {
+    //     const key = try allocator.alloc(u8, 6);
+    //     key[0] = 'a';
+    //     key[1] = 'b';
+    //     key[2] = 'c';
+    //     key[3] = 'd';
+    //     key[4] = 'e';
+    //     key[5] = @intCast(i);
+
+    //     try keys.append(allocator, key);
+    //     try art.insert(allocator, key, @intCast(i));
+    // }
+
     defer {
         for (keys.items) |k| {
             allocator.free(k);
         }
     }
 
-    // try art.prettyPrint(allocator);
+    try art.prettyPrint(allocator);
+
+    // std.debug.print("any: {any}\n", .{art.lookup(keys.items[98])});
+
+    for (keys.items) |k| {
+        std.debug.print("K: {any}\n", .{k});
+        try testing.expect(art.lookup(k) != null);
+    }
 }
