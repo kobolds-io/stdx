@@ -527,45 +527,6 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             }
         }
 
-        // fn initNode4FromChildren(
-        //     allocator: std.mem.Allocator,
-        //     old_children: []?*Node,
-        //     old_num_children: usize,
-        //     prefix: []const u8,
-        //     prefix_len: usize,
-        //     new_leaf: ?*Node,
-        //     new_leaf_byte: u8,
-        // ) !Node4 {
-        //     var n4 = Node4{
-        //         .prefix_len = @intCast(prefix_len),
-        //         .prefix = undefined,
-        //         .num_children = old_num_children + if (new_leaf) 1 else 0,
-        //         .keys = [_]u8{0} ** 4,
-        //         .children = [_]?*Node{null} ** 4,
-        //     };
-
-        //     if (prefix_len > 0) {
-        //         @memcpy(n4.prefix[0..prefix_len], prefix);
-        //     }
-
-        //     // copy existing children and set keys
-        //     var idx: usize = 0;
-        //     while (idx < old_num_children) : (idx += 1) {
-        //         const child = old_children[idx].?;
-        //         const byte = getKeyByteAfterPrefix(child, prefix_len);
-        //         n4.keys[idx] = byte;
-        //         n4.children[idx] = child;
-        //     }
-
-        //     // insert new leaf if provided
-        //     if (new_leaf) |leaf| {
-        //         n4.keys[idx] = new_leaf_byte;
-        //         n4.children[idx] = leaf;
-        //     }
-
-        //     return n4;
-        // }
-
         fn splitNode4Prefix(
             self: *Self,
             allocator: std.mem.Allocator,
