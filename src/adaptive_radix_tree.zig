@@ -2166,3 +2166,78 @@ test "handle deletes from a Node256 and shrinks correctly" {
         try testing.expect(art.delete(allocator, k));
     }
 }
+
+test "deletes deeply nested value" {
+    const allocator = testing.allocator;
+
+    var art = AdaptiveRadixTree(u32).init(allocator);
+    defer art.deinit(allocator);
+
+    var keys: std.ArrayList([]const u8) = .empty;
+    defer keys.deinit(allocator);
+
+    // --------------- Build up a nested tree
+    for (0..256) |i| {
+        const key = try allocator.alloc(u8, 2);
+        key[0] = 'a';
+        key[1] = @intCast(i);
+
+        try keys.append(allocator, key);
+        try art.insert(allocator, key, @intCast(i));
+    }
+
+    for (0..48) |i| {
+        const key = try allocator.alloc(u8, 3);
+        key[0] = 'a';
+        key[1] = 'b';
+        key[2] = @intCast(i);
+
+        try keys.append(allocator, key);
+        try art.insert(allocator, key, @intCast(i));
+    }
+
+    for (0..16) |i| {
+        const key = try allocator.alloc(u8, 4);
+        key[0] = 'a';
+        key[1] = 'b';
+        key[2] = 'c';
+        key[3] = @intCast(i);
+
+        try keys.append(allocator, key);
+        try art.insert(allocator, key, @intCast(i));
+    }
+
+    for (0..4) |i| {
+        const key = try allocator.alloc(u8, 5);
+        key[0] = 'a';
+        key[1] = 'b';
+        key[2] = 'c';
+        key[3] = 'd';
+        key[4] = @intCast(i);
+
+        try keys.append(allocator, key);
+        try art.insert(allocator, key, @intCast(i));
+    }
+
+    for (0..1) |i| {
+        const key = try allocator.alloc(u8, 6);
+        key[0] = 'a';
+        key[1] = 'b';
+        key[2] = 'c';
+        key[3] = 'd';
+        key[4] = 'e';
+        key[5] = @intCast(i);
+
+        try keys.append(allocator, key);
+        try art.insert(allocator, key, @intCast(i));
+    }
+
+    defer for (keys.items) |k| allocator.free(k);
+
+    // delete all the keys in reverse order
+    var i: usize = 0;
+    while (i > 0) : (i -= 1) {
+        const k = keys.items[i];
+        try testing.expect(art.delete(allocator, k));
+    }
+}
