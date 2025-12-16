@@ -810,8 +810,27 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
                     // ---------------- prefix matches ----------------
                     const next_depth = depth + n48.prefix_len;
-                    const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
 
+                    // if (next_depth == key.len) {
+                    //     const idx = n48.index[TERMINATOR];
+                    //     if (idx != 0xFF) {
+                    //         n48.children[idx].?.leaf.value = value;
+                    //         return;
+                    //     }
+
+                    //     const slot = findFreeSlot(&n48.children);
+                    //     const leaf = try allocator.create(Node);
+                    //     leaf.* = .{ .leaf = .{ .key = key, .value = value } };
+
+                    //     n48.children[idx] = leaf;
+                    //     n48.index[TERMINATOR] = @intCast(slot);
+                    //     n48.keys[TERMINATOR] = @intCast(slot + 1);
+                    //     n48.num_children += 1;
+                    //     self.size += 1;
+                    //     return;
+                    // }
+
+                    const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
                     const idx = n48.index[b];
 
                     // ---------------- existing child ----------------
@@ -847,6 +866,64 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                     // ---------------- Node48 full -> grow to Node256 ----------------
                     return self.growNode48ToNode256(allocator, node_ptr, n48, key, value, depth);
                 },
+                // .node_256 => |*n256| {
+                //     // ---------- prefix check ----------
+                //     const max_cmp = @min(n256.prefix_len, key.len - depth);
+                //     var i: usize = 0;
+                //     while (i < max_cmp and n256.prefix[i] == key[depth + i]) : (i += 1) {}
+
+                //     if (i < n256.prefix_len) {
+                //         return self.splitNode256Prefix(
+                //             allocator,
+                //             node_ptr,
+                //             n256,
+                //             key,
+                //             value,
+                //             depth,
+                //             i,
+                //         );
+                //     }
+
+                //     const next_depth = depth + n256.prefix_len;
+
+                //     // ---------- TERMINATOR INSERT ----------
+                //     if (next_depth == key.len) {
+                //         if (n256.children[TERMINATOR]) |child| {
+                //             // overwrite existing leaf
+                //             child.leaf.value = value;
+                //             return;
+                //         }
+
+                //         const leaf = try allocator.create(Node);
+                //         leaf.* = .{ .leaf = .{ .key = key, .value = value } };
+
+                //         n256.children[TERMINATOR] = leaf;
+                //         n256.num_children += 1;
+                //         self.size += 1;
+                //         return;
+                //     }
+
+                //     // ---------- NORMAL BYTE ----------
+                //     const b: u8 = key[next_depth];
+
+                //     if (n256.children[b]) |child| {
+                //         return self.insertAt(
+                //             allocator,
+                //             child,
+                //             key,
+                //             value,
+                //             next_depth + 1,
+                //         );
+                //     }
+
+                //     const leaf = try allocator.create(Node);
+                //     leaf.* = .{ .leaf = .{ .key = key, .value = value } };
+
+                //     n256.children[b] = leaf;
+                //     n256.num_children += 1;
+                //     self.size += 1;
+                // },
+
                 .node_256 => |*n256| {
                     // ---------------- prefix check ----------------
                     const max_cmp = @min(n256.prefix_len, key.len - depth);
@@ -894,6 +971,12 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                     self.size += 1;
                 },
             }
+        }
+
+        fn findFreeSlot(children: []const ?*Node) usize {
+            var slot: usize = 0;
+            while (slot < children.len) : (slot += 1) if (children[slot] == null) return slot;
+            unreachable; // guaranteed by num_children < 48
         }
 
         fn splitNode4Prefix(
@@ -1116,6 +1199,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             }
 
             const next_depth = depth + n16.prefix_len;
+
             const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
 
             // Allocate new leaf
@@ -1124,9 +1208,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
             // Find first free child slot
             var slot: usize = 0;
-            while (slot < n48.children.len) : (slot += 1) {
-                if (n48.children[slot] == null) break;
-            }
+            while (slot < n48.children.len) : (slot += 1) if (n48.children[slot] == null) break;
 
             assert(slot < n48.children.len);
             assert(n48.index[b] == 0xFF);
@@ -1223,9 +1305,8 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             n48: *Node48,
             key: []const u8,
             value: V,
-            _: usize,
+            depth: usize,
         ) !void {
-            // allocate the new Node256
             const new_node = try allocator.create(Node);
             new_node.* = Node{
                 .node_256 = .{
@@ -1238,39 +1319,101 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
             var n256 = &new_node.node_256;
 
-            // copy the keys and children from the Node4 to the Node256
-            var j: usize = 0;
-            while (j < n48.num_children) : (j += 1) {
-                // n256.keys[j] = n48.keys[j];
-                n256.children[j] = n48.children[j];
+            // copy children from Node48 to Node256
+            // We iterate 0..256 because Node48 uses the 'index' array to map byte -> slot
+            for (0..n48.index.len) |i| {
+                const idx = n48.index[i];
+                if (idx != 0xFF) {
+                    // 'i' is the key byte, so it goes directly into children[i]
+                    n256.children[i] = n48.children[idx].?;
+                }
             }
 
-            // find the sorted position of where the new_leaf should be inserted
-            const insert_pos = blk: {
-                var k: usize = 0;
-                while (k < n256.num_children) : (k += 1) if (n256.children[k] == null) break;
-                break :blk k;
-            };
+            const next_depth = depth + n48.prefix_len;
+            const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
 
-            @memmove(
-                n256.children[insert_pos + 1 .. n256.num_children + 1],
-                n256.children[insert_pos..n256.num_children],
-            );
-
-            // create the new leaf
             const new_leaf = try allocator.create(Node);
             new_leaf.* = .{ .leaf = .{ .key = key, .value = value } };
 
-            // insert the new leaf
-            n256.children[insert_pos] = new_leaf;
+            n256.children[b] = new_leaf;
             n256.num_children += 1;
 
-            // replace node_ptr in-place
             node_ptr.* = new_node.*;
             allocator.destroy(new_node);
 
             self.size += 1;
         }
+
+        // fn growNode48ToNode256(
+        //     self: *Self,
+        //     allocator: std.mem.Allocator,
+        //     node_ptr: *Node,
+        //     n48: *Node48,
+        //     key: []const u8,
+        //     value: V,
+        //     _: usize,
+        // ) !void {
+        //     // allocate the new Node256
+        //     const new_node = try allocator.create(Node);
+        //     new_node.* = Node{
+        //         .node_256 = .{
+        //             .prefix_len = n48.prefix_len,
+        //             .prefix = n48.prefix,
+        //             .num_children = n48.num_children,
+        //             .children = [_]?*Node{null} ** 256,
+        //         },
+        //     };
+
+        //     var n256 = &new_node.node_256;
+
+        //     // if there is node in the TERMINATOR slot, we should move it to the Node256 TERMINATOR slot
+        //     const term_idx = n48.index[TERMINATOR];
+        //     if (term_idx != 0xFF) {
+        //         assert(n48.children[term_idx] != null);
+        //         n256.children[TERMINATOR] = n48.children[term_idx].?;
+        //         n256.num_children += 1;
+
+        //         // remove this item from the node_48
+        //         n48.index[TERMINATOR] = 0xFF;
+        //         n48.keys[TERMINATOR] = 0;
+        //         n48.children[term_idx] = null;
+        //         n48.num_children -= 1;
+        //     }
+
+        //     // copy the keys and children from the Node4 to the Node256
+        //     for (0..256) |b| {
+        //         const idx = n48.index[b];
+        //         if (idx != 0xFF) {
+        //             n256.children[b] = n48.children[idx].?;
+        //         }
+        //     }
+
+        //     // find the sorted position of where the new_leaf should be inserted
+        //     const insert_pos = blk: {
+        //         var k: usize = 0;
+        //         while (k < n256.num_children) : (k += 1) if (n256.children[k] == null) break;
+        //         break :blk k;
+        //     };
+
+        //     @memmove(
+        //         n256.children[insert_pos + 1 .. n256.num_children + 1],
+        //         n256.children[insert_pos..n256.num_children],
+        //     );
+
+        //     // create the new leaf
+        //     const new_leaf = try allocator.create(Node);
+        //     new_leaf.* = .{ .leaf = .{ .key = key, .value = value } };
+
+        //     // insert the new leaf
+        //     n256.children[insert_pos] = new_leaf;
+        //     n256.num_children += 1;
+
+        //     // replace node_ptr in-place
+        //     node_ptr.* = new_node.*;
+        //     allocator.destroy(new_node);
+
+        //     self.size += 1;
+        // }
 
         fn splitNode256Prefix(
             self: *Self,
@@ -1360,7 +1503,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
         pub fn prettyPrint(self: *Self, allocator: std.mem.Allocator) !void {
             if (self.root) |r| {
-                try Self.printNodePretty(r, allocator, "", true);
+                try printNodePretty(r, allocator, "", true);
             } else {
                 std.debug.print("(empty ART)\n", .{});
             }
@@ -1760,7 +1903,7 @@ test "node48 grows to node256" {
     defer keys.deinit(allocator);
 
     try art.insert(allocator, "a0", 0);
-    try art.insert(allocator, "a1", 0);
+    try art.insert(allocator, "a1", 99);
     try art.insert(allocator, "a2", 0);
     try art.insert(allocator, "a3", 0);
     try art.insert(allocator, "a4", 0);
@@ -1769,6 +1912,8 @@ test "node48 grows to node256" {
     try art.insert(allocator, "a7", 0);
     try art.insert(allocator, "a8", 0);
     try art.insert(allocator, "a9", 0); // 10
+
+    // try art.prettyPrint(allocator);
 
     try art.insert(allocator, "aa", 0);
     try art.insert(allocator, "ab", 0);
@@ -1796,6 +1941,8 @@ test "node48 grows to node256" {
     try art.insert(allocator, "ax", 0);
     try art.insert(allocator, "ay", 0);
     try art.insert(allocator, "az", 0); // 26
+
+    // try art.prettyPrint(allocator);
 
     try art.insert(allocator, "a~", 0);
     try art.insert(allocator, "a!", 0);
@@ -1965,11 +2112,7 @@ test "lookup returns found value" {
     defer for (keys.items) |k| allocator.free(k);
 
     for (keys.items) |k| {
-        testing.expect(art.lookup(k) != null) catch |e| {
-            std.debug.print("k: {any}\n", .{k});
-            try art.prettyPrint(allocator);
-            return e;
-        };
+        try testing.expect(art.lookup(k) != null);
     }
 }
 
