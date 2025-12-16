@@ -139,7 +139,7 @@ test "AdaptiveRadixTree benchmarks" {
     defer allocator.free(delete_title);
 
     try bench.addParam(
-        insert_title,
+        delete_title,
         &BenchmarkAdaptiveRadixTreeDelete.new(&art_data_list, &delete_art),
         .{
             .hooks = .{
@@ -163,7 +163,7 @@ test "AdaptiveRadixTree benchmarks" {
     defer allocator.free(lookup_title);
 
     try bench.addParam(
-        insert_title,
+        lookup_title,
         &BenchmarkAdaptiveRadixTreeLookup.new(&art_data_list, &insert_art),
         .{},
     );
