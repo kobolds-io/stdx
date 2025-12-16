@@ -9,11 +9,6 @@ const InsertError = std.mem.Allocator.Error || error{
     TreeInvariantViolation,
 };
 
-// const DeleteResult = enum {
-//     node_removed, // node still exists
-//     node_deleted, // caller must remove this child pointer
-// };
-
 pub fn AdaptiveRadixTree(comptime V: type) type {
     return struct {
         const Self = @This();
