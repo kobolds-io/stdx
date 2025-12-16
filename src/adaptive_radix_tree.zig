@@ -9,10 +9,10 @@ const InsertError = std.mem.Allocator.Error || error{
     TreeInvariantViolation,
 };
 
-const DeleteResult = enum {
-    node_removed, // node still exists
-    node_deleted, // caller must remove this child pointer
-};
+// const DeleteResult = enum {
+//     node_removed, // node still exists
+//     node_deleted, // caller must remove this child pointer
+// };
 
 pub fn AdaptiveRadixTree(comptime V: type) type {
     return struct {
@@ -58,7 +58,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
         };
 
         /// Medium node: uses a dense index array for fast lookup
-        pub const Node48 = struct {
+        const Node48 = struct {
             prefix_len: u8,
             prefix: [MAX_PREFIX]u8,
             num_children: u8,
@@ -67,11 +67,16 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             children: [48]?*Node,
         };
 
-        pub const Node256 = struct {
+        const Node256 = struct {
             prefix_len: u8,
             prefix: [MAX_PREFIX]u8,
             num_children: u16,
             children: [256]?*Node,
+        };
+
+        const DeleteResult = struct {
+            deleted: bool,
+            replacement: ?*Node, // null = node was removed, non-null = node survives or was replaced
         };
 
         root: ?*Node = null,
@@ -207,17 +212,252 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
         pub fn delete(self: *Self, allocator: std.mem.Allocator, key: []const u8) bool {
             if (self.root == null) return false;
-            std.debug.print("deleting: {any}\n", .{key});
-            self.prettyPrint(allocator) catch unreachable;
+            // std.debug.print("deleting: {any}\n", .{key});
+            // self.prettyPrint(allocator) catch unreachable;
 
             const res = self.deleteAt(allocator, self.root.?, key, 0);
-            if (res) {
-                self.size -= 1;
-                if (self.size == 0) self.root = null;
-            }
+            if (!res.deleted) return false;
 
-            return res;
+            self.size -= 1;
+            self.root = res.replacement;
+
+            return true;
         }
+
+        // fn deleteAt(
+        //     self: *Self,
+        //     allocator: std.mem.Allocator,
+        //     node_ptr: *Node,
+        //     key: []const u8,
+        //     depth: usize,
+        // ) DeleteResult {
+        //     switch (node_ptr.*) {
+        //         .leaf => |leaf| {
+        //             if (!std.mem.eql(u8, leaf.key, key)) return false;
+
+        //             allocator.destroy(node_ptr);
+        //             return .node_deleted;
+        //         },
+        //         .node_4 => |*n4| {
+        //             // ---------------- prefix compare ----------------
+        //             var i: usize = 0;
+        //             while (i < n4.prefix_len and depth + i < key.len and n4.prefix[i] == key[depth + i]) : (i += 1) {}
+
+        //             // prefix mismatch -> key not present
+        //             if (i < n4.prefix_len) return false;
+
+        //             const next_depth = depth + n4.prefix_len;
+        //             const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
+
+        //             // ---------------- lookup child ----------------
+        //             var idx: usize = 0;
+        //             while (idx < n4.num_children) : (idx += 1) {
+        //                 if (n4.keys[idx] == b) {
+        //                     // if there is no child deleted, then there was not match!
+        //                     std.debug.print("node4 - trying to delete: {}, key: {any}\n", .{ n4.children[idx].?, key });
+        //                     if (!self.deleteAt(allocator, n4.children[idx].?, key, next_depth + 1)) return false;
+        //                     std.debug.print("node4 - deleted key: {any}\n", .{key});
+
+        //                     // handle the case where the last child was removed
+        //                     if (idx == n4.num_children - 1) {
+        //                         n4.keys[idx] = 0;
+        //                         n4.children[idx] = null;
+        //                     } else {
+        //                         // shift children and keys left
+        //                         var j: usize = idx;
+        //                         while (j < n4.num_children) : (j += 1) {
+        //                             // handle the case where we cannot shift left
+        //                             if (j == 0) continue;
+
+        //                             // shift left
+        //                             n4.keys[j - 1] = n4.keys[j];
+        //                             n4.children[j - 1] = n4.children[j];
+
+        //                             // clean shifted slots
+        //                             n4.keys[j] = 0;
+        //                             n4.children[j] = null;
+        //                         }
+        //                     }
+
+        //                     n4.num_children -= 1;
+
+        //                     if (n4.num_children == 1) {
+        //                         // if there is only a single child left, shrink this Node4
+        //                         self.shrinkNode4(allocator, node_ptr, n4);
+        //                     } else if (n4.num_children == 0) {
+        //                         // destroy this node
+        //                         allocator.destroy(node_ptr);
+        //                     }
+
+        //                     return true;
+        //                 }
+        //             }
+
+        //             // child with byte b not found -> key not present
+        //             return false;
+        //         },
+        //         .node_16 => |*n16| {
+        //             // ---------------- prefix compare ----------------
+        //             var i: usize = 0;
+        //             while (i < n16.prefix_len and depth + i < key.len and n16.prefix[i] == key[depth + i]) : (i += 1) {}
+
+        //             // prefix mismatch -> key not present
+        //             if (i < n16.prefix_len) return false;
+
+        //             const next_depth = depth + n16.prefix_len;
+        //             const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
+
+        //             // ---------------- lookup child ----------------
+        //             var idx: usize = 0;
+        //             while (idx < n16.num_children) : (idx += 1) {
+        //                 if (n16.keys[idx] == b) {
+        //                     // if there is no child deleted, then there was not match!
+        //                     // ---------------- recursive delete ----------------
+        //                     std.debug.print("node16 - trying to delete: {}, key: {any}\n", .{ n16.children[idx].?, key });
+        //                     if (!self.deleteAt(allocator, n16.children[idx].?, key, next_depth + 1)) return false;
+        //                     std.debug.print("node16 - deleted key: {any}\n", .{key});
+
+        //                     // handle the case where the last child was removed
+        //                     if (idx == n16.num_children - 1) {
+        //                         n16.keys[idx] = 0;
+        //                         n16.children[idx] = null;
+        //                     } else {
+        //                         // shift children and keys left
+        //                         var j: usize = idx;
+        //                         while (j < n16.num_children) : (j += 1) {
+        //                             // handle the case where we cannot shift left
+        //                             if (j == 0) continue;
+
+        //                             // shift left
+        //                             n16.keys[j - 1] = n16.keys[j];
+        //                             n16.children[j - 1] = n16.children[j];
+
+        //                             // clean shifted slots
+        //                             n16.keys[j] = 0;
+        //                             n16.children[j] = null;
+        //                         }
+        //                     }
+
+        //                     n16.num_children -= 1;
+
+        //                     // ---------------- shrink / destroy ----------------
+        //                     if (n16.num_children <= 4) {
+        //                         self.shrinkNode16ToNode4(allocator, node_ptr, n16);
+        //                         std.debug.print("key: {any}\n", .{key});
+        //                         std.debug.print("shrunk node_16 to node_4\n", .{});
+        //                     } else if (n16.num_children == 0) {
+        //                         allocator.destroy(node_ptr);
+        //                     }
+
+        //                     return true;
+        //                 }
+        //             }
+
+        //             // child with byte b not found -> key not present
+        //             return false;
+        //         },
+        //         .node_48 => |*n48| {
+        //             // ---------------- prefix compare ----------------
+        //             var i: usize = 0;
+        //             while (i < n48.prefix_len and depth + i < key.len and n48.prefix[i] == key[depth + i]) : (i += 1) {}
+
+        //             // prefix mismatch -> key not present
+        //             if (i < n48.prefix_len) return false;
+
+        //             const next_depth = depth + n48.prefix_len;
+        //             const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
+
+        //             // ---------------- lookup child ----------------
+        //             const key_idx = n48.keys[b];
+        //             if (key_idx == 0) return false; // child does not exist
+
+        //             const child_idx: usize = @intCast(key_idx - 1);
+        //             const child_ptr = n48.children[child_idx].?;
+
+        //             // ---------------- recursive delete ----------------
+        //             std.debug.print("node48 - trying to delete: {}, key: {any}\n", .{ child_ptr, key });
+        //             if (!self.deleteAt(allocator, child_ptr, key, next_depth + 1)) return false;
+        //             std.debug.print("node48 - deleted key: {any}\n", .{key});
+
+        //             // the bug is here. We don't return enough information from deleted at
+        //             // to know if we should do anything at this level.
+        //             //
+        //             // TODO: we need to have deleteAt return MORE info.
+
+        //             // clear key mapping
+        //             n48.keys[b] = 0;
+
+        //             // if last child, just clear slot
+        //             if (child_idx == n48.num_children - 1) {
+        //                 n48.children[child_idx] = null;
+        //             } else {
+        //                 // shift children left
+        //                 var j: usize = child_idx;
+        //                 while (j + 1 < n48.num_children) : (j += 1) {
+        //                     n48.children[j] = n48.children[j + 1];
+        //                 }
+        //                 n48.children[n48.num_children - 1] = null;
+
+        //                 // fix key indices that pointed past removed child
+        //                 var k: usize = 0;
+        //                 while (k < n48.keys.len) : (k += 1) {
+        //                     const v = n48.keys[k];
+        //                     if (v != 0 and v - 1 > child_idx) {
+        //                         n48.keys[k] = v - 1;
+        //                     }
+        //                 }
+        //             }
+
+        //             n48.num_children -= 1;
+
+        //             // ---------------- shrink / destroy ----------------
+        //             if (n48.num_children <= 16) {
+        //                 self.shrinkNode48ToNode16(allocator, node_ptr, n48);
+        //                 std.debug.print("key: {any}\n", .{key});
+        //                 std.debug.print("shrunk node_48 to node_16\n", .{});
+        //             } else if (n48.num_children == 0) {
+        //                 allocator.destroy(node_ptr);
+        //             }
+
+        //             return true;
+        //         },
+        //         .node_256 => |*n256| {
+        //             // ---------------- prefix check ----------------
+        //             var i: usize = 0;
+        //             while (i < n256.prefix_len and
+        //                 depth + i < key.len and
+        //                 n256.prefix[i] == key[depth + i]) : (i += 1)
+        //             {}
+
+        //             // prefix mismatch -> key not present
+        //             if (i < n256.prefix_len) return false;
+
+        //             const next_depth = depth + n256.prefix_len;
+        //             const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
+
+        //             // no child -> key not present
+        //             const child = n256.children[b] orelse return false;
+
+        //             // ---------------- recursive delete ----------------
+        //             if (!self.deleteAt(allocator, child, key, next_depth + 1)) return false;
+
+        //             // child was deleted -> clear slot
+        //             n256.children[b] = null;
+        //             n256.num_children -= 1;
+
+        //             // ---------------- shrink / destroy ----------------
+        //             if (n256.num_children <= 48) {
+        //                 self.shrinkNode256ToNode48(allocator, node_ptr, n256);
+        //                 // std.debug.print("shrunk node_256 to node_48\n", .{});
+        //             } else if (n256.num_children == 0) {
+        //                 // should never hit this since the node always shrinks
+        //                 allocator.destroy(node_ptr);
+        //             }
+
+        //             return true;
+        //         },
+        //     }
+        // }
 
         fn deleteAt(
             self: *Self,
@@ -225,231 +465,180 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             node_ptr: *Node,
             key: []const u8,
             depth: usize,
-        ) bool {
+        ) DeleteResult {
             switch (node_ptr.*) {
                 .leaf => |leaf| {
-                    if (!std.mem.eql(u8, leaf.key, key)) return false;
+                    if (!std.mem.eql(u8, leaf.key, key)) {
+                        return DeleteResult{ .deleted = false, .replacement = null };
+                    }
 
                     allocator.destroy(node_ptr);
-                    return true;
+                    return DeleteResult{ .deleted = true, .replacement = null };
                 },
+
                 .node_4 => |*n4| {
-                    // ---------------- prefix compare ----------------
                     var i: usize = 0;
                     while (i < n4.prefix_len and depth + i < key.len and n4.prefix[i] == key[depth + i]) : (i += 1) {}
-
-                    // prefix mismatch -> key not present
-                    if (i < n4.prefix_len) return false;
+                    if (i < n4.prefix_len) return DeleteResult{ .deleted = false, .replacement = null };
 
                     const next_depth = depth + n4.prefix_len;
                     const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
 
-                    // ---------------- lookup child ----------------
                     var idx: usize = 0;
                     while (idx < n4.num_children) : (idx += 1) {
                         if (n4.keys[idx] == b) {
-                            // if there is no child deleted, then there was not match!
-                            std.debug.print("node4 - trying to delete: {}, key: {any}\n", .{ n4.children[idx].?, key });
-                            if (!self.deleteAt(allocator, n4.children[idx].?, key, next_depth + 1)) return false;
-                            std.debug.print("node4 - deleted key: {any}\n", .{key});
+                            const res = self.deleteAt(allocator, n4.children[idx].?, key, next_depth + 1);
+                            if (!res.deleted) return DeleteResult{ .deleted = false, .replacement = null };
 
-                            // handle the case where the last child was removed
-                            if (idx == n4.num_children - 1) {
-                                n4.keys[idx] = 0;
-                                n4.children[idx] = null;
+                            if (res.replacement) |new_child| {
+                                n4.children[idx] = new_child;
                             } else {
-                                // shift children and keys left
+                                // child was removed -> shift left
                                 var j: usize = idx;
-                                while (j < n4.num_children) : (j += 1) {
-                                    // handle the case where we cannot shift left
-                                    if (j == 0) continue;
-
-                                    // shift left
-                                    n4.keys[j - 1] = n4.keys[j];
-                                    n4.children[j - 1] = n4.children[j];
-
-                                    // clean shifted slots
-                                    n4.keys[j] = 0;
-                                    n4.children[j] = null;
+                                while (j + 1 < n4.num_children) : (j += 1) {
+                                    n4.keys[j] = n4.keys[j + 1];
+                                    n4.children[j] = n4.children[j + 1];
                                 }
+                                n4.keys[n4.num_children - 1] = 0;
+                                n4.children[n4.num_children - 1] = null;
+                                n4.num_children -= 1;
                             }
 
-                            n4.num_children -= 1;
-
-                            if (n4.num_children == 1) {
-                                // if there is only a single child left, shrink this Node4
-                                self.shrinkNode4(allocator, node_ptr, n4);
-                            } else if (n4.num_children == 0) {
-                                // destroy this node
+                            // shrink / destroy logic
+                            if (n4.num_children == 0) {
                                 allocator.destroy(node_ptr);
+                                return DeleteResult{ .deleted = true, .replacement = null };
+                            } else if (n4.num_children == 1) {
+                                self.shrinkNode4(allocator, node_ptr, n4);
+                                return DeleteResult{ .deleted = true, .replacement = node_ptr };
+                            } else {
+                                return DeleteResult{ .deleted = true, .replacement = node_ptr };
                             }
-
-                            return true;
                         }
                     }
 
-                    // child with byte b not found -> key not present
-                    return false;
+                    return DeleteResult{ .deleted = false, .replacement = null };
                 },
+
                 .node_16 => |*n16| {
-                    // ---------------- prefix compare ----------------
                     var i: usize = 0;
                     while (i < n16.prefix_len and depth + i < key.len and n16.prefix[i] == key[depth + i]) : (i += 1) {}
-
-                    // prefix mismatch -> key not present
-                    if (i < n16.prefix_len) return false;
+                    if (i < n16.prefix_len) return DeleteResult{ .deleted = false, .replacement = null };
 
                     const next_depth = depth + n16.prefix_len;
                     const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
 
-                    // ---------------- lookup child ----------------
                     var idx: usize = 0;
                     while (idx < n16.num_children) : (idx += 1) {
                         if (n16.keys[idx] == b) {
-                            // if there is no child deleted, then there was not match!
-                            // ---------------- recursive delete ----------------
-                            std.debug.print("node16 - trying to delete: {}, key: {any}\n", .{ n16.children[idx].?, key });
-                            if (!self.deleteAt(allocator, n16.children[idx].?, key, next_depth + 1)) return false;
-                            std.debug.print("node16 - deleted key: {any}\n", .{key});
+                            const res = self.deleteAt(allocator, n16.children[idx].?, key, next_depth + 1);
+                            if (!res.deleted) return DeleteResult{ .deleted = false, .replacement = null };
 
-                            // handle the case where the last child was removed
-                            if (idx == n16.num_children - 1) {
-                                n16.keys[idx] = 0;
-                                n16.children[idx] = null;
+                            if (res.replacement) |new_child| {
+                                n16.children[idx] = new_child;
                             } else {
-                                // shift children and keys left
                                 var j: usize = idx;
-                                while (j < n16.num_children) : (j += 1) {
-                                    // handle the case where we cannot shift left
-                                    if (j == 0) continue;
-
-                                    // shift left
-                                    n16.keys[j - 1] = n16.keys[j];
-                                    n16.children[j - 1] = n16.children[j];
-
-                                    // clean shifted slots
-                                    n16.keys[j] = 0;
-                                    n16.children[j] = null;
+                                while (j + 1 < n16.num_children) : (j += 1) {
+                                    n16.keys[j] = n16.keys[j + 1];
+                                    n16.children[j] = n16.children[j + 1];
                                 }
+                                n16.keys[n16.num_children - 1] = 0;
+                                n16.children[n16.num_children - 1] = null;
+                                n16.num_children -= 1;
                             }
 
-                            n16.num_children -= 1;
-
-                            // ---------------- shrink / destroy ----------------
-                            if (n16.num_children <= 4) {
-                                self.shrinkNode16ToNode4(allocator, node_ptr, n16);
-                                std.debug.print("key: {any}\n", .{key});
-                                std.debug.print("shrunk node_16 to node_4\n", .{});
-                            } else if (n16.num_children == 0) {
+                            if (n16.num_children == 0) {
                                 allocator.destroy(node_ptr);
+                                return DeleteResult{ .deleted = true, .replacement = null };
+                            } else if (n16.num_children <= 4) {
+                                self.shrinkNode16ToNode4(allocator, node_ptr, n16);
+                                return DeleteResult{ .deleted = true, .replacement = node_ptr };
+                            } else {
+                                return DeleteResult{ .deleted = true, .replacement = node_ptr };
                             }
-
-                            return true;
                         }
                     }
 
-                    // child with byte b not found -> key not present
-                    return false;
+                    return DeleteResult{ .deleted = false, .replacement = null };
                 },
+
                 .node_48 => |*n48| {
-                    // ---------------- prefix compare ----------------
                     var i: usize = 0;
                     while (i < n48.prefix_len and depth + i < key.len and n48.prefix[i] == key[depth + i]) : (i += 1) {}
-
-                    // prefix mismatch -> key not present
-                    if (i < n48.prefix_len) return false;
+                    if (i < n48.prefix_len) return DeleteResult{ .deleted = false, .replacement = null };
 
                     const next_depth = depth + n48.prefix_len;
                     const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
 
-                    // ---------------- lookup child ----------------
                     const key_idx = n48.keys[b];
-                    if (key_idx == 0) return false; // child does not exist
+                    if (key_idx == 0) return DeleteResult{ .deleted = false, .replacement = null };
 
                     const child_idx: usize = @intCast(key_idx - 1);
                     const child_ptr = n48.children[child_idx].?;
 
-                    // ---------------- recursive delete ----------------
-                    std.debug.print("node48 - trying to delete: {}, key: {any}\n", .{ child_ptr, key });
-                    if (!self.deleteAt(allocator, child_ptr, key, next_depth + 1)) return false;
-                    std.debug.print("node48 - deleted key: {any}\n", .{key});
+                    const res = self.deleteAt(allocator, child_ptr, key, next_depth + 1);
+                    if (!res.deleted) return DeleteResult{ .deleted = false, .replacement = null };
 
-                    // the bug is here. We don't return enough information from deleted at
-                    // to know if we should do anything at this level.
-                    //
-                    // TODO: we need to have deleteAt return MORE info.
-
-                    // clear key mapping
-                    n48.keys[b] = 0;
-
-                    // if last child, just clear slot
-                    if (child_idx == n48.num_children - 1) {
-                        n48.children[child_idx] = null;
+                    if (res.replacement) |new_child| {
+                        n48.children[child_idx] = new_child;
                     } else {
-                        // shift children left
+                        // remove child and shift
                         var j: usize = child_idx;
                         while (j + 1 < n48.num_children) : (j += 1) {
                             n48.children[j] = n48.children[j + 1];
                         }
                         n48.children[n48.num_children - 1] = null;
 
-                        // fix key indices that pointed past removed child
+                        // fix key mapping
                         var k: usize = 0;
-                        while (k < n48.keys.len) : (k += 1) {
+                        while (k < 256) : (k += 1) {
                             const v = n48.keys[k];
-                            if (v != 0 and v - 1 > child_idx) {
-                                n48.keys[k] = v - 1;
-                            }
+                            if (v != 0 and v - 1 > child_idx) n48.keys[k] = v - 1;
                         }
+
+                        n48.keys[b] = 0;
+                        n48.num_children -= 1;
                     }
 
-                    n48.num_children -= 1;
-
-                    // ---------------- shrink / destroy ----------------
-                    if (n48.num_children <= 16) {
-                        self.shrinkNode48ToNode16(allocator, node_ptr, n48);
-                        std.debug.print("key: {any}\n", .{key});
-                        std.debug.print("shrunk node_48 to node_16\n", .{});
-                    } else if (n48.num_children == 0) {
+                    if (n48.num_children == 0) {
                         allocator.destroy(node_ptr);
+                        return DeleteResult{ .deleted = true, .replacement = null };
+                    } else if (n48.num_children <= 16) {
+                        self.shrinkNode48ToNode16(allocator, node_ptr, n48);
+                        return DeleteResult{ .deleted = true, .replacement = node_ptr };
+                    } else {
+                        return DeleteResult{ .deleted = true, .replacement = node_ptr };
                     }
-
-                    return true;
                 },
-                .node_256 => |*n256| {
-                    // ---------------- prefix check ----------------
-                    var i: usize = 0;
-                    while (i < n256.prefix_len and
-                        depth + i < key.len and
-                        n256.prefix[i] == key[depth + i]) : (i += 1)
-                    {}
 
-                    // prefix mismatch -> key not present
-                    if (i < n256.prefix_len) return false;
+                .node_256 => |*n256| {
+                    var i: usize = 0;
+                    while (i < n256.prefix_len and depth + i < key.len and n256.prefix[i] == key[depth + i]) : (i += 1) {}
+                    if (i < n256.prefix_len) return DeleteResult{ .deleted = false, .replacement = null };
 
                     const next_depth = depth + n256.prefix_len;
                     const b: u8 = if (next_depth < key.len) key[next_depth] else TERMINATOR;
 
-                    // no child -> key not present
-                    const child = n256.children[b] orelse return false;
+                    const child = n256.children[b] orelse return DeleteResult{ .deleted = false, .replacement = null };
+                    const res = self.deleteAt(allocator, child, key, next_depth + 1);
+                    if (!res.deleted) return DeleteResult{ .deleted = false, .replacement = null };
 
-                    // ---------------- recursive delete ----------------
-                    if (!self.deleteAt(allocator, child, key, next_depth + 1)) return false;
-
-                    // child was deleted -> clear slot
-                    n256.children[b] = null;
-                    n256.num_children -= 1;
-
-                    // ---------------- shrink / destroy ----------------
-                    if (n256.num_children <= 48) {
-                        self.shrinkNode256ToNode48(allocator, node_ptr, n256);
-                        // std.debug.print("shrunk node_256 to node_48\n", .{});
-                    } else if (n256.num_children == 0) {
-                        // should never hit this since the node always shrinks
-                        allocator.destroy(node_ptr);
+                    if (res.replacement) |new_child| {
+                        n256.children[b] = new_child;
+                    } else {
+                        n256.children[b] = null;
+                        n256.num_children -= 1;
                     }
 
-                    return true;
+                    if (n256.num_children == 0) {
+                        allocator.destroy(node_ptr);
+                        return DeleteResult{ .deleted = true, .replacement = null };
+                    } else if (n256.num_children <= 48) {
+                        self.shrinkNode256ToNode48(allocator, node_ptr, n256);
+                        return DeleteResult{ .deleted = true, .replacement = node_ptr };
+                    } else {
+                        return DeleteResult{ .deleted = true, .replacement = node_ptr };
+                    }
                 },
             }
         }
@@ -2273,15 +2462,13 @@ test "deletes deeply nested value" {
     defer for (keys.items) |k| allocator.free(k);
     try testing.expectEqual(256 + 48 + 16 + 4 + 1, art.size);
 
-    // try art.prettyPrint(allocator);
-
     // delete all the keys in reverse order
     var i: usize = keys.items.len - 1;
-    while (i > 0) : (i -= 1) {
+    while (i < keys.items.len) : (i -%= 1) {
         const k = keys.items[i];
-        // try art.prettyPrint(allocator);
         try testing.expect(art.delete(allocator, k));
     }
 
+    // try art.prettyPrint(allocator);
     try testing.expectEqual(0, art.size);
 }
