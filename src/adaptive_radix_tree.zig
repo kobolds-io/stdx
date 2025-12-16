@@ -1916,12 +1916,7 @@ test "lookup returns found value" {
         try art.insert(allocator, key, @intCast(i));
     }
 
-    for (keys.items) |k| {
-        // std.debug.print("K: {any}\n", .{k});
-        try testing.expect(art.lookup(k) != null);
-    }
-
-    for (0..3) |i| {
+    for (0..48) |i| {
         const key = try allocator.alloc(u8, 3);
         key[0] = 'a';
         key[1] = 'b';
@@ -1931,7 +1926,7 @@ test "lookup returns found value" {
         try art.insert(allocator, key, @intCast(i));
     }
 
-    for (0..15) |i| {
+    for (0..16) |i| {
         const key = try allocator.alloc(u8, 4);
         key[0] = 'a';
         key[1] = 'b';
@@ -1942,7 +1937,7 @@ test "lookup returns found value" {
         try art.insert(allocator, key, @intCast(i));
     }
 
-    for (0..3) |i| {
+    for (0..4) |i| {
         const key = try allocator.alloc(u8, 5);
         key[0] = 'a';
         key[1] = 'b';
@@ -1967,16 +1962,14 @@ test "lookup returns found value" {
         try art.insert(allocator, key, @intCast(i));
     }
 
-    defer {
-        for (keys.items) |k| {
-            allocator.free(k);
-        }
-    }
-
-    // try art.prettyPrint(allocator);
+    defer for (keys.items) |k| allocator.free(k);
 
     for (keys.items) |k| {
-        try testing.expect(art.lookup(k) != null);
+        testing.expect(art.lookup(k) != null) catch |e| {
+            std.debug.print("k: {any}\n", .{k});
+            try art.prettyPrint(allocator);
+            return e;
+        };
     }
 }
 
@@ -2178,7 +2171,7 @@ test "handle deletes from a Node256 and shrinks correctly" {
     defer for (keys.items) |k| allocator.free(k);
 
     for (keys.items) |k| {
-        try art.prettyPrint(allocator);
+        // try art.prettyPrint(allocator);
         try testing.expect(art.delete(allocator, k));
     }
 }
