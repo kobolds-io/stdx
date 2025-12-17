@@ -123,8 +123,15 @@ fn setupBenchmarks(b: *std.Build, target: std.Build.ResolvedTarget, optimize: st
     });
     const zbench_mod = zbench_dep.module("zbench");
 
+    const uuid_dep = b.dependency("uuid", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const uuid_mod = uuid_dep.module("uuid");
+
     bench_lib.root_module.addImport("stdx", stdx_mod);
     bench_lib.root_module.addImport("zbench", zbench_mod);
+    bench_lib.root_module.addImport("uuid", uuid_mod);
 
     const run_bench_tests = b.addRunArtifact(bench_lib);
     const bench_test_step = b.step("bench", "Run benchmark tests");
