@@ -2171,3 +2171,16 @@ test "deletes deeply nested value" {
     // try art.prettyPrint(allocator);
     try testing.expectEqual(0, art.size);
 }
+
+test "inserts long keys" {
+    const allocator = testing.allocator;
+
+    const k0 = "actinotherapeutic";
+    const k1 = "actinotherapeutics";
+
+    var art = AdaptiveRadixTree(u32).init(allocator);
+    defer art.deinit(allocator);
+
+    try art.insert(allocator, k0, 0);
+    try art.insert(allocator, k1, 0);
+}
