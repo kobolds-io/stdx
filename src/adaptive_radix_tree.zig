@@ -267,7 +267,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                                 allocator.destroy(node_ptr);
                                 return DeleteResult{ .deleted = true, .replacement = null };
                             } else if (n4.num_children == 1) {
-                                self.shrinkNode4(allocator, node_ptr, n4);
+                                shrinkNode4(allocator, node_ptr, n4);
                                 return DeleteResult{ .deleted = true, .replacement = node_ptr };
                             } else {
                                 return DeleteResult{ .deleted = true, .replacement = node_ptr };
@@ -309,7 +309,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                                 allocator.destroy(node_ptr);
                                 return DeleteResult{ .deleted = true, .replacement = null };
                             } else if (n16.num_children <= 4) {
-                                self.shrinkNode16ToNode4(allocator, node_ptr, n16);
+                                shrinkNode16ToNode4(node_ptr, n16);
                                 return DeleteResult{ .deleted = true, .replacement = node_ptr };
                             } else {
                                 return DeleteResult{ .deleted = true, .replacement = node_ptr };
@@ -362,7 +362,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                         allocator.destroy(node_ptr);
                         return DeleteResult{ .deleted = true, .replacement = null };
                     } else if (n48.num_children <= 16) {
-                        self.shrinkNode48ToNode16(allocator, node_ptr, n48);
+                        shrinkNode48ToNode16(node_ptr, n48);
                         return DeleteResult{ .deleted = true, .replacement = node_ptr };
                     } else {
                         return DeleteResult{ .deleted = true, .replacement = node_ptr };
@@ -392,7 +392,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                         allocator.destroy(node_ptr);
                         return DeleteResult{ .deleted = true, .replacement = null };
                     } else if (n256.num_children <= 48) {
-                        self.shrinkNode256ToNode48(allocator, node_ptr, n256);
+                        shrinkNode256ToNode48(node_ptr, n256);
                         return DeleteResult{ .deleted = true, .replacement = node_ptr };
                     } else {
                         return DeleteResult{ .deleted = true, .replacement = node_ptr };
@@ -401,20 +401,20 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             }
         }
 
-        fn shrinkNode4(_: Self, allocator: std.mem.Allocator, parent: *Node, n4: *Node4) void {
+        fn shrinkNode4(allocator: std.mem.Allocator, node_ptr: *Node, n4: *Node4) void {
             assert(n4.num_children == 1);
 
             const child = n4.children[0].?;
             switch (child.*) {
                 .leaf => {
-                    parent.* = child.*;
+                    node_ptr.* = child.*;
                     allocator.destroy(child);
                 },
                 else => {},
             }
         }
 
-        fn shrinkNode16ToNode4(_: Self, allocator: std.mem.Allocator, parent: *Node, n16: *Node16) void {
+        fn shrinkNode16ToNode4(parent: *Node, n16: *Node16) void {
             assert(n16.num_children <= 4);
 
             // create a new node4
@@ -443,20 +443,12 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
             // destroy the n16
             parent.* = new_node;
-            _ = allocator;
         }
 
-        fn shrinkNode48ToNode16(
-            _: *Self,
-            allocator: std.mem.Allocator,
-            node_ptr: *Node,
-            n48: *Node48,
-        ) void {
+        fn shrinkNode48ToNode16(node_ptr: *Node, n48: *Node48) void {
             // Node48 should only shrink when <= 16 children
             assert(n48.num_children <= 16);
 
-            // Allocate new Node16
-            // const new_node = allocator.create(Node) catch unreachable;
             var new_node = Node{
                 .node_16 = .{
                     .prefix_len = n48.prefix_len,
@@ -485,31 +477,11 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
             assert(out_idx == n16.num_children);
 
-            // for (n48.children[0..n48.num_children]) |o| {
-            //     if (o) |c| {
-            //         std.debug.print("node48: {any}\n", .{c});
-            //     }
-            // }
-            // for (n16.children[0..n16.num_children]) |o| {
-            //     if (o) |c| {
-            //         std.debug.print("node16: {any}\n", .{c});
-            //     }
-            // }
-
             // Replace node in place
             node_ptr.* = new_node;
-            _ = allocator;
-            // allocator.destroy(new_node);
         }
 
-        fn shrinkNode256ToNode48(
-            self: *Self,
-            allocator: std.mem.Allocator,
-            node_ptr: *Node,
-            n256: *Node256,
-        ) void {
-            _ = self;
-            _ = allocator;
+        fn shrinkNode256ToNode48(node_ptr: *Node, n256: *Node256) void {
             // Node256 should only shrink when it fits into Node48
             assert(n256.num_children <= 48);
 
@@ -546,10 +518,14 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
 
             // Replace node in place
             node_ptr.* = new_node;
-            // allocator.destroy(new_node);
         }
 
-        pub fn insert(self: *Self, allocator: std.mem.Allocator, key: []const u8, value: V) InsertError!void {
+        pub fn insert(
+            self: *Self,
+            allocator: std.mem.Allocator,
+            key: []const u8,
+            value: V,
+        ) InsertError!void {
             // tree is empty, just create a leaf
             if (self.root == null) {
                 const new_node = try allocator.create(Node);
@@ -869,12 +845,6 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             }
         }
 
-        fn findFreeSlot(children: []const ?*Node) usize {
-            var slot: usize = 0;
-            while (slot < children.len) : (slot += 1) if (children[slot] == null) return slot;
-            unreachable; // guaranteed by num_children < 48
-        }
-
         fn splitNode4Prefix(
             self: *Self,
             allocator: std.mem.Allocator,
@@ -888,9 +858,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             const old_byte = n4.prefix[index];
             const new_byte: u8 = if (depth + index < key.len) key[depth + index] else TERMINATOR;
 
-            // new parent node
-            const parent = try allocator.create(Node);
-            parent.* = Node{
+            var parent = Node{
                 .node_4 = .{
                     .prefix_len = @intCast(index),
                     .prefix = undefined,
@@ -899,6 +867,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
                     .children = [_]?*Node{null} ** 4,
                 },
             };
+
             @memcpy(parent.node_4.prefix[0..index], n4.prefix[0..index]);
 
             // Clone old node
@@ -925,8 +894,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             parent.node_4.num_children = 2;
 
             // replace node in-place
-            node_ptr.* = parent.*;
-            allocator.destroy(parent);
+            node_ptr.* = parent;
 
             self.size += 1;
             return;
@@ -941,8 +909,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             value: V,
             depth: usize,
         ) !void {
-            const new_node = try allocator.create(Node);
-            new_node.* = Node{
+            var new_node = Node{
                 .node_16 = .{
                     .prefix_len = n4.prefix_len,
                     .prefix = n4.prefix,
@@ -991,8 +958,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             n16.num_children += 1;
 
             // replace node_ptr in-place
-            node_ptr.* = new_node.*;
-            allocator.destroy(new_node);
+            node_ptr.* = new_node;
 
             self.size += 1;
         }
@@ -1014,8 +980,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             const old_n16 = &old_node.node_16;
 
             // Create new parent Node4
-            const parent = try allocator.create(Node);
-            parent.* = .{
+            var parent = Node{
                 .node_4 = .{
                     .prefix_len = @intCast(index),
                     .prefix = undefined,
@@ -1056,8 +1021,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             n4.num_children = 2;
 
             // Replace node_ptr with parent
-            node_ptr.* = parent.*;
-            allocator.destroy(parent);
+            node_ptr.* = parent;
 
             self.size += 1;
         }
@@ -1071,8 +1035,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             value: V,
             depth: usize,
         ) !void {
-            const new_node = try allocator.create(Node);
-            new_node.* = .{
+            var new_node = Node{
                 .node_48 = .{
                     .prefix_len = n16.prefix_len,
                     .prefix = n16.prefix,
@@ -1116,8 +1079,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             n48.num_children += 1;
 
             // Replace node in place
-            node_ptr.* = new_node.*;
-            allocator.destroy(new_node);
+            node_ptr.* = new_node;
 
             self.size += 1;
         }
@@ -1132,10 +1094,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             depth: usize,
             index: usize,
         ) InsertError!void {
-
-            // create new parent Node4
-            const parent = try allocator.create(Node);
-            parent.* = Node{
+            var parent = Node{
                 .node_4 = .{
                     .prefix_len = @intCast(index),
                     .prefix = undefined,
@@ -1188,9 +1147,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             }
 
             // Replace node_ptr with parent
-            node_ptr.* = parent.*;
-            allocator.destroy(parent);
-
+            node_ptr.* = parent;
             self.size += 1;
         }
 
@@ -1203,8 +1160,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             value: V,
             depth: usize,
         ) !void {
-            const new_node = try allocator.create(Node);
-            new_node.* = Node{
+            var new_node = Node{
                 .node_256 = .{
                     .prefix_len = n48.prefix_len,
                     .prefix = n48.prefix,
@@ -1234,8 +1190,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             n256.children[b] = new_leaf;
             n256.num_children += 1;
 
-            node_ptr.* = new_node.*;
-            allocator.destroy(new_node);
+            node_ptr.* = new_node;
 
             self.size += 1;
         }
@@ -1250,9 +1205,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             depth: usize,
             index: usize,
         ) InsertError!void {
-            // --- Create new parent Node4 ---
-            const parent = try allocator.create(Node);
-            parent.* = Node{
+            var parent = Node{
                 .node_4 = .{
                     .prefix_len = @intCast(index),
                     .prefix = undefined,
@@ -1306,8 +1259,7 @@ pub fn AdaptiveRadixTree(comptime V: type) type {
             }
 
             // Replace node_ptr with parent
-            node_ptr.* = parent.*;
-            allocator.destroy(parent);
+            node_ptr.* = parent;
 
             self.size += 1;
         }
