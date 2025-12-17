@@ -218,22 +218,22 @@ test "AdaptiveRadixTree benchmarks" {
         },
     );
 
-    const insert_word_title = try std.fmt.allocPrint(
-        allocator,
-        "insert {} words",
-        .{art_word_data_list.items.len},
-    );
-    defer allocator.free(insert_word_title);
+    // const insert_word_title = try std.fmt.allocPrint(
+    //     allocator,
+    //     "insert {} words",
+    //     .{art_word_data_list.items.len},
+    // );
+    // defer allocator.free(insert_word_title);
 
-    try bench.addParam(
-        insert_word_title,
-        &BenchmarkAdaptiveRadixTreeInsert.new(&art_word_data_list, &insert_art),
-        .{
-            .hooks = .{
-                .before_each = beforeEachARTInsert,
-            },
-        },
-    );
+    // try bench.addParam(
+    //     insert_word_title,
+    //     &BenchmarkAdaptiveRadixTreeInsert.new(&art_word_data_list, &insert_art),
+    //     .{
+    //         .hooks = .{
+    //             .before_each = beforeEachARTInsert,
+    //         },
+    //     },
+    // );
 
     delete_int_art = AdaptiveRadixTree(usize).init(allocator);
     defer delete_int_art.deinit(allocator);
@@ -241,8 +241,8 @@ test "AdaptiveRadixTree benchmarks" {
     delete_uuid_art = AdaptiveRadixTree(usize).init(allocator);
     defer delete_uuid_art.deinit(allocator);
 
-    delete_word_art = AdaptiveRadixTree(usize).init(allocator);
-    defer delete_word_art.deinit(allocator);
+    // delete_word_art = AdaptiveRadixTree(usize).init(allocator);
+    // defer delete_word_art.deinit(allocator);
 
     const delete_int_title = try std.fmt.allocPrint(
         allocator,
@@ -278,22 +278,22 @@ test "AdaptiveRadixTree benchmarks" {
         },
     );
 
-    const delete_word_title = try std.fmt.allocPrint(
-        allocator,
-        "delete {} words",
-        .{art_word_data_list.items.len},
-    );
-    defer allocator.free(delete_word_title);
+    // const delete_word_title = try std.fmt.allocPrint(
+    //     allocator,
+    //     "delete {} words",
+    //     .{art_word_data_list.items.len},
+    // );
+    // defer allocator.free(delete_word_title);
 
-    try bench.addParam(
-        delete_word_title,
-        &BenchmarkAdaptiveRadixTreeDelete.new(&art_word_data_list, &delete_word_art),
-        .{
-            .hooks = .{
-                .before_each = beforeEachARTDeleteWord,
-            },
-        },
-    );
+    // try bench.addParam(
+    //     delete_word_title,
+    //     &BenchmarkAdaptiveRadixTreeDelete.new(&art_word_data_list, &delete_word_art),
+    //     .{
+    //         .hooks = .{
+    //             .before_each = beforeEachARTDeleteWord,
+    //         },
+    //     },
+    // );
 
     // initialize the lookup_int_art
     lookup_int_art = AdaptiveRadixTree(usize).init(allocator);
@@ -310,11 +310,11 @@ test "AdaptiveRadixTree benchmarks" {
     // populate the lookup_art
     for (art_int_data_list.items) |int| try lookup_int_art.insert(allocator, int, 0);
     for (art_uuid_data_list.items) |uid| try lookup_uuid_art.insert(allocator, uid, 0);
-    for (art_word_data_list.items) |word| {
-        std.debug.print("word: {s}\n", .{word});
+    // for (art_word_data_list.items) |word| {
+    //     std.debug.print("word: {s}\n", .{word});
 
-        try lookup_word_art.insert(allocator, word, 0);
-    }
+    //     try lookup_word_art.insert(allocator, word, 0);
+    // }
 
     const lookup_title = try std.fmt.allocPrint(
         allocator,
@@ -342,18 +342,18 @@ test "AdaptiveRadixTree benchmarks" {
         .{},
     );
 
-    const lookup_word_title = try std.fmt.allocPrint(
-        allocator,
-        "lookup {} words",
-        .{art_word_data_list.items.len},
-    );
-    defer allocator.free(lookup_word_title);
+    // const lookup_word_title = try std.fmt.allocPrint(
+    //     allocator,
+    //     "lookup {} words",
+    //     .{art_word_data_list.items.len},
+    // );
+    // defer allocator.free(lookup_word_title);
 
-    try bench.addParam(
-        lookup_word_title,
-        &BenchmarkAdaptiveRadixTreeLookup.new(&art_word_data_list, &lookup_word_art),
-        .{},
-    );
+    // try bench.addParam(
+    //     lookup_word_title,
+    //     &BenchmarkAdaptiveRadixTreeLookup.new(&art_word_data_list, &lookup_word_art),
+    //     .{},
+    // );
 
     var stderr = std.fs.File.stderr().writerStreaming(&.{});
     const writer = &stderr.interface;
@@ -429,8 +429,12 @@ const BenchmarkStdStringHashMapUnamanagedGet = struct {
 };
 
 var put_hash_map: std.StringHashMapUnmanaged(usize) = undefined;
-var remove_hash_map: std.StringHashMapUnmanaged(usize) = undefined;
-var get_hash_map: std.StringHashMapUnmanaged(usize) = undefined;
+var remove_int_hash_map: std.StringHashMapUnmanaged(usize) = undefined;
+var remove_uuid_hash_map: std.StringHashMapUnmanaged(usize) = undefined;
+var remove_word_hash_map: std.StringHashMapUnmanaged(usize) = undefined;
+var get_int_hash_map: std.StringHashMapUnmanaged(usize) = undefined;
+var get_uuid_hash_map: std.StringHashMapUnmanaged(usize) = undefined;
+var get_word_hash_map: std.StringHashMapUnmanaged(usize) = undefined;
 var hash_map_int_data_list: std.ArrayList([]const u8) = .empty;
 var hash_map_uuid_data_list: std.ArrayList([]const u8) = .empty;
 var hash_map_word_data_list: std.ArrayList([]const u8) = .empty;
@@ -441,9 +445,16 @@ fn beforeEachHashMapPut() void {
     put_hash_map = .empty;
 }
 
-fn beforeEachHashMapRemove() void {
-    // populate the get_hash_map
-    for (hash_map_int_data_list.items) |i| remove_hash_map.put(allocator, i, 0) catch unreachable;
+fn beforeEachHashMapRemoveInt() void {
+    for (hash_map_int_data_list.items) |i| remove_int_hash_map.put(allocator, i, 0) catch unreachable;
+}
+
+fn beforeEachHashMapRemoveUUID() void {
+    for (hash_map_uuid_data_list.items) |i| remove_uuid_hash_map.put(allocator, i, 0) catch unreachable;
+}
+
+fn beforeEachHashMapRemoveWord() void {
+    for (hash_map_word_data_list.items) |i| remove_word_hash_map.put(allocator, i, 0) catch unreachable;
 }
 
 test "std.StringHashMapUnmanaged benchmarks" {
@@ -559,63 +570,136 @@ test "std.StringHashMapUnmanaged benchmarks" {
         },
     );
 
-    const put_word_title = try std.fmt.allocPrint(
-        allocator,
-        "put {} words",
-        .{hash_map_word_data_list.items.len},
-    );
-    defer allocator.free(put_word_title);
+    // const put_word_title = try std.fmt.allocPrint(
+    //     allocator,
+    //     "put {} words",
+    //     .{hash_map_word_data_list.items.len},
+    // );
+    // defer allocator.free(put_word_title);
 
-    try bench.addParam(
-        put_word_title,
-        &BenchmarkStdStringHashMapUnamanagedPut.new(&hash_map_word_data_list, &put_hash_map),
-        .{
-            .hooks = .{
-                .before_each = beforeEachHashMapPut,
-            },
-        },
-    );
+    // try bench.addParam(
+    //     put_word_title,
+    //     &BenchmarkStdStringHashMapUnamanagedPut.new(&hash_map_word_data_list, &put_hash_map),
+    //     .{
+    //         .hooks = .{
+    //             .before_each = beforeEachHashMapPut,
+    //         },
+    //     },
+    // );
 
     // initialize the remove_hash_map
-    remove_hash_map = .empty;
-    defer remove_hash_map.deinit(allocator);
+    remove_int_hash_map = .empty;
+    defer remove_int_hash_map.deinit(allocator);
 
-    const remove_title = try std.fmt.allocPrint(
+    remove_uuid_hash_map = .empty;
+    defer remove_uuid_hash_map.deinit(allocator);
+
+    remove_word_hash_map = .empty;
+    defer remove_word_hash_map.deinit(allocator);
+
+    const remove_int_title = try std.fmt.allocPrint(
         allocator,
         "remove {} items",
         .{hash_map_int_data_list.items.len},
     );
-    defer allocator.free(remove_title);
+    defer allocator.free(remove_int_title);
 
     try bench.addParam(
-        remove_title,
-        &BenchmarkStdStringHashMapUnamanagedRemove.new(&hash_map_int_data_list, &remove_hash_map),
+        remove_int_title,
+        &BenchmarkStdStringHashMapUnamanagedRemove.new(&hash_map_int_data_list, &remove_int_hash_map),
         .{
             .hooks = .{
-                .before_each = beforeEachHashMapRemove,
+                .before_each = beforeEachHashMapRemoveInt,
             },
         },
     );
 
-    // initialize the put_hash_map
-    get_hash_map = .empty;
-    defer get_hash_map.deinit(allocator);
+    const remove_uuid_title = try std.fmt.allocPrint(
+        allocator,
+        "remove {} uuids",
+        .{hash_map_int_data_list.items.len},
+    );
+    defer allocator.free(remove_uuid_title);
+
+    try bench.addParam(
+        remove_uuid_title,
+        &BenchmarkStdStringHashMapUnamanagedRemove.new(&hash_map_uuid_data_list, &remove_uuid_hash_map),
+        .{
+            .hooks = .{
+                .before_each = beforeEachHashMapRemoveUUID,
+            },
+        },
+    );
+
+    // const remove_word_title = try std.fmt.allocPrint(
+    //     allocator,
+    //     "remove {} words",
+    //     .{hash_map_int_data_list.items.len},
+    // );
+    // defer allocator.free(remove_word_title);
+
+    // try bench.addParam(
+    //     remove_word_title,
+    //     &BenchmarkStdStringHashMapUnamanagedRemove.new(&hash_map_word_data_list, &remove_word_hash_map),
+    //     .{
+    //         .hooks = .{
+    //             .before_each = beforeEachHashMapRemoveWord,
+    //         },
+    //     },
+    // );
+
+    get_int_hash_map = .empty;
+    defer get_int_hash_map.deinit(allocator);
+
+    get_uuid_hash_map = .empty;
+    defer get_uuid_hash_map.deinit(allocator);
+
+    get_word_hash_map = .empty;
+    defer get_word_hash_map.deinit(allocator);
 
     // populate the get_hash_map
-    for (hash_map_int_data_list.items) |i| try get_hash_map.put(allocator, i, 0);
+    for (hash_map_int_data_list.items) |i| try get_int_hash_map.put(allocator, i, 0);
+    for (hash_map_uuid_data_list.items) |i| try get_uuid_hash_map.put(allocator, i, 0);
+    // for (hash_map_word_data_list.items) |i| try get_word_hash_map.put(allocator, i, 0);
 
-    const get_title = try std.fmt.allocPrint(
+    const get_int_title = try std.fmt.allocPrint(
         allocator,
         "get {} items",
         .{hash_map_int_data_list.items.len},
     );
-    defer allocator.free(get_title);
+    defer allocator.free(get_int_title);
 
     try bench.addParam(
-        get_title,
-        &BenchmarkStdStringHashMapUnamanagedGet.new(&hash_map_int_data_list, &put_hash_map),
+        get_int_title,
+        &BenchmarkStdStringHashMapUnamanagedGet.new(&hash_map_int_data_list, &get_int_hash_map),
         .{},
     );
+
+    const get_uuid_title = try std.fmt.allocPrint(
+        allocator,
+        "get {} uuids",
+        .{hash_map_uuid_data_list.items.len},
+    );
+    defer allocator.free(get_uuid_title);
+
+    try bench.addParam(
+        get_uuid_title,
+        &BenchmarkStdStringHashMapUnamanagedGet.new(&hash_map_uuid_data_list, &get_uuid_hash_map),
+        .{},
+    );
+
+    // const get_word_title = try std.fmt.allocPrint(
+    //     allocator,
+    //     "get {} words",
+    //     .{hash_map_word_data_list.items.len},
+    // );
+    // defer allocator.free(get_word_title);
+
+    // try bench.addParam(
+    //     get_word_title,
+    //     &BenchmarkStdStringHashMapUnamanagedGet.new(&hash_map_word_data_list, &get_word_hash_map),
+    //     .{},
+    // );
 
     var stderr = std.fs.File.stderr().writerStreaming(&.{});
     const writer = &stderr.interface;
