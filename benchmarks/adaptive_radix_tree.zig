@@ -50,6 +50,7 @@ const BenchmarkAdaptiveRadixTreeDelete = struct {
 
     pub fn run(self: Self, alloc: std.mem.Allocator) void {
         for (self.list.items) |k| {
+            // std.debug.print("k: {s}\n", .{k});
             assert(self.art.delete(alloc, k));
         }
     }
@@ -76,8 +77,12 @@ const BenchmarkAdaptiveRadixTreeLookup = struct {
 };
 
 var insert_art: AdaptiveRadixTree(usize) = undefined;
-var delete_art: AdaptiveRadixTree(usize) = undefined;
-var lookup_art: AdaptiveRadixTree(usize) = undefined;
+var delete_int_art: AdaptiveRadixTree(usize) = undefined;
+var delete_uuid_art: AdaptiveRadixTree(usize) = undefined;
+var delete_word_art: AdaptiveRadixTree(usize) = undefined;
+var lookup_int_art: AdaptiveRadixTree(usize) = undefined;
+var lookup_uuid_art: AdaptiveRadixTree(usize) = undefined;
+var lookup_word_art: AdaptiveRadixTree(usize) = undefined;
 var art_int_data_list: std.ArrayList([]const u8) = .empty;
 var art_uuid_data_list: std.ArrayList([]const u8) = undefined;
 var art_word_data_list: std.ArrayList([]const u8) = undefined;
@@ -88,9 +93,16 @@ fn beforeEachARTInsert() void {
     insert_art = AdaptiveRadixTree(usize).init(allocator);
 }
 
-fn beforeEachARTDelete() void {
-    // populate the delete_art
-    for (art_int_data_list.items) |i| delete_art.insert(allocator, i, 0) catch unreachable;
+fn beforeEachARTDeleteInt() void {
+    for (art_int_data_list.items) |i| delete_int_art.insert(allocator, i, 0) catch unreachable;
+}
+
+fn beforeEachARTDeleteUUID() void {
+    for (art_uuid_data_list.items) |i| delete_uuid_art.insert(allocator, i, 0) catch unreachable;
+}
+
+fn beforeEachARTDeleteWord() void {
+    for (art_word_data_list.items) |i| delete_word_art.insert(allocator, i, 0) catch unreachable;
 }
 
 test "AdaptiveRadixTree benchmarks" {
@@ -134,7 +146,7 @@ test "AdaptiveRadixTree benchmarks" {
         const upper_limit: usize = 300_000;
         while (idx < upper_limit) : (idx += 1) {
             const bytes = reader.takeDelimiterExclusive('\n') catch break;
-            const uid = try allocator.alloc(u8, bytes.len);
+            const uid = try std.fmt.allocPrint(allocator, "{s}", .{bytes});
 
             try art_uuid_data_list.append(allocator, uid);
         }
@@ -159,9 +171,9 @@ test "AdaptiveRadixTree benchmarks" {
         const upper_limit: usize = 300_000;
         while (idx < upper_limit) : (idx += 1) {
             const bytes = reader.takeDelimiterExclusive('\n') catch break;
-            const uid = try allocator.alloc(u8, bytes.len);
+            const word = try std.fmt.allocPrint(allocator, "{s}", .{bytes});
 
-            try art_word_data_list.append(allocator, uid);
+            try art_word_data_list.append(allocator, word);
         }
 
         const words_read_from_file_count = art_word_data_list.items.len;
@@ -223,29 +235,86 @@ test "AdaptiveRadixTree benchmarks" {
         },
     );
 
-    const delete_title = try std.fmt.allocPrint(
+    delete_int_art = AdaptiveRadixTree(usize).init(allocator);
+    defer delete_int_art.deinit(allocator);
+
+    delete_uuid_art = AdaptiveRadixTree(usize).init(allocator);
+    defer delete_uuid_art.deinit(allocator);
+
+    delete_word_art = AdaptiveRadixTree(usize).init(allocator);
+    defer delete_word_art.deinit(allocator);
+
+    const delete_int_title = try std.fmt.allocPrint(
         allocator,
         "delete {} items",
         .{art_int_data_list.items.len},
     );
-    defer allocator.free(delete_title);
+    defer allocator.free(delete_int_title);
 
     try bench.addParam(
-        delete_title,
-        &BenchmarkAdaptiveRadixTreeDelete.new(&art_int_data_list, &delete_art),
+        delete_int_title,
+        &BenchmarkAdaptiveRadixTreeDelete.new(&art_int_data_list, &delete_int_art),
         .{
             .hooks = .{
-                .before_each = beforeEachARTDelete,
+                .before_each = beforeEachARTDeleteInt,
             },
         },
     );
 
-    // initialize the lookup_art
-    lookup_art = AdaptiveRadixTree(usize).init(allocator);
-    defer lookup_art.deinit(allocator);
+    const delete_uuid_title = try std.fmt.allocPrint(
+        allocator,
+        "delete {} uuids",
+        .{art_uuid_data_list.items.len},
+    );
+    defer allocator.free(delete_uuid_title);
+
+    try bench.addParam(
+        delete_uuid_title,
+        &BenchmarkAdaptiveRadixTreeDelete.new(&art_uuid_data_list, &delete_uuid_art),
+        .{
+            .hooks = .{
+                .before_each = beforeEachARTDeleteUUID,
+            },
+        },
+    );
+
+    const delete_word_title = try std.fmt.allocPrint(
+        allocator,
+        "delete {} words",
+        .{art_word_data_list.items.len},
+    );
+    defer allocator.free(delete_word_title);
+
+    try bench.addParam(
+        delete_word_title,
+        &BenchmarkAdaptiveRadixTreeDelete.new(&art_word_data_list, &delete_word_art),
+        .{
+            .hooks = .{
+                .before_each = beforeEachARTDeleteWord,
+            },
+        },
+    );
+
+    // initialize the lookup_int_art
+    lookup_int_art = AdaptiveRadixTree(usize).init(allocator);
+    defer lookup_int_art.deinit(allocator);
+
+    // initialize the lookup_uuid_art
+    lookup_uuid_art = AdaptiveRadixTree(usize).init(allocator);
+    defer lookup_uuid_art.deinit(allocator);
+
+    // initialize the lookup_word_art
+    lookup_word_art = AdaptiveRadixTree(usize).init(allocator);
+    defer lookup_word_art.deinit(allocator);
 
     // populate the lookup_art
-    for (art_int_data_list.items) |i| try lookup_art.insert(allocator, i, 0);
+    for (art_int_data_list.items) |int| try lookup_int_art.insert(allocator, int, 0);
+    for (art_uuid_data_list.items) |uid| try lookup_uuid_art.insert(allocator, uid, 0);
+    for (art_word_data_list.items) |word| {
+        std.debug.print("word: {s}\n", .{word});
+
+        try lookup_word_art.insert(allocator, word, 0);
+    }
 
     const lookup_title = try std.fmt.allocPrint(
         allocator,
@@ -256,7 +325,33 @@ test "AdaptiveRadixTree benchmarks" {
 
     try bench.addParam(
         lookup_title,
-        &BenchmarkAdaptiveRadixTreeLookup.new(&art_int_data_list, &insert_art),
+        &BenchmarkAdaptiveRadixTreeLookup.new(&art_int_data_list, &lookup_int_art),
+        .{},
+    );
+
+    const lookup_uuid_title = try std.fmt.allocPrint(
+        allocator,
+        "lookup {} uuids",
+        .{art_uuid_data_list.items.len},
+    );
+    defer allocator.free(lookup_uuid_title);
+
+    try bench.addParam(
+        lookup_uuid_title,
+        &BenchmarkAdaptiveRadixTreeLookup.new(&art_uuid_data_list, &lookup_uuid_art),
+        .{},
+    );
+
+    const lookup_word_title = try std.fmt.allocPrint(
+        allocator,
+        "lookup {} words",
+        .{art_word_data_list.items.len},
+    );
+    defer allocator.free(lookup_word_title);
+
+    try bench.addParam(
+        lookup_word_title,
+        &BenchmarkAdaptiveRadixTreeLookup.new(&art_word_data_list, &lookup_word_art),
         .{},
     );
 
@@ -392,7 +487,7 @@ test "std.StringHashMapUnmanaged benchmarks" {
         const upper_limit: usize = 300_000;
         while (idx < upper_limit) : (idx += 1) {
             const bytes = reader.takeDelimiterExclusive('\n') catch break;
-            const uid = try allocator.alloc(u8, bytes.len);
+            const uid = try std.fmt.allocPrint(allocator, "{s}", .{bytes});
 
             try hash_map_uuid_data_list.append(allocator, uid);
         }
@@ -417,9 +512,9 @@ test "std.StringHashMapUnmanaged benchmarks" {
         const upper_limit: usize = 300_000;
         while (idx < upper_limit) : (idx += 1) {
             const bytes = reader.takeDelimiterExclusive('\n') catch break;
-            const uid = try allocator.alloc(u8, bytes.len);
+            const word = try std.fmt.allocPrint(allocator, "{s}", .{bytes});
 
-            try hash_map_word_data_list.append(allocator, uid);
+            try hash_map_word_data_list.append(allocator, word);
         }
 
         const words_read_from_file_count = hash_map_word_data_list.items.len;
