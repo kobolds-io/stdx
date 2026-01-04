@@ -1,6 +1,6 @@
 # Overview
 
-> **CAUTION** this project has been archived. Please see https://codeberg.org/kobolds-io/stdx. See https://github.com/kobolds-io/kobolds/blob/main/migrating.md for details
+> **CAUTION** this project has been archived. Please see https://gitlab.com/kobolds-io/stdx. See https://github.com/kobolds-io/kobolds/blob/main/migrating.md for details
 
 This is a library adding several generally useful tools that are either not included in the standard library or have slightly different behavior. As the `zig` programming language matures, we should get more and more awesome `std` library features but until then...
 
