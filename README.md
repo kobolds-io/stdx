@@ -57,7 +57,7 @@ fn main() !void {
 Install using zig fetch
 
 ```bash
-zig fetch --save  https://codeberg.org/kobolds-io/stdx/archive/refs/tags/v0.2.0.tar.gz
+zig fetch --save  https://gitlab.com/kobolds-io/stdx/-/archive/v0.2.0/stdx-v0.2.0.tar.gz
 ```
 
 Alternatively, you can install `stdx` just like any other `zig` dependency by editing your `build.zig.zon` file.
@@ -65,8 +65,8 @@ Alternatively, you can install `stdx` just like any other `zig` dependency by ed
 ```zig
     .dependencies = .{
         .stdx = .{
-            .url = "https://github.com/kobolds-io/stdx/archive/refs/tags/v0.2.0.tar.gz",
-            .hash = "",
+            .url = "https://gitlab.com/kobolds-io/stdx/-/archive/v0.2.0/stdx-v0.2.0.tar.gz",
+            .hash = "stdx-0.2.0-nyLNAc-NAgBBO1TNctRUZjdBZzMk_-TjSMe9OAj3dvsn",
         },
     },
 ```
