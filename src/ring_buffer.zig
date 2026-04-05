@@ -40,6 +40,8 @@ pub fn RingBuffer(comptime T: type) type {
         count: usize,
 
         pub fn initCapacity(allocator: std.mem.Allocator, capacity: usize) !Self {
+            if (capacity == 0) return error.InvalidCapacity;
+
             const buffer = try allocator.alloc(T, capacity);
             errdefer allocator.free(buffer);
 
@@ -54,14 +56,16 @@ pub fn RingBuffer(comptime T: type) type {
 
         pub const empty: Self = .{
             .capacity = 0,
-            .buffer = undefined,
+            .buffer = &.{},
             .head = 0,
             .tail = 0,
             .count = 0,
         };
 
         pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
-            allocator.free(self.buffer);
+            if (self.capacity > 0) {
+                allocator.free(self.buffer);
+            }
         }
 
         /// return the number of available slots remaining in the ring buffer. An
@@ -428,8 +432,11 @@ pub fn RingBuffer(comptime T: type) type {
         }
 
         /// Resize the ring buffer to a new capacity. This operation invalidates any reference
-        /// the the ring_buffer.buffer as a new buffer is created in its place.
+        /// the the ring_buffer.buffer as a new buffer is created in its place. `new_capacity`
+        /// must be greater than 0
         pub fn resize(self: *Self, allocator: std.mem.Allocator, new_capacity: usize) !void {
+            if (new_capacity == 0) return error.InvalidCapacity;
+
             // Don't allow shrink that would truncate existing data
             if (self.count > new_capacity)
                 return error.OutOfMemory;
@@ -461,6 +468,13 @@ test "init/deinit" {
     const allocator = testing.allocator;
 
     var ring_buffer = try RingBuffer(u8).initCapacity(allocator, 100);
+    defer ring_buffer.deinit(allocator);
+}
+
+test "init empty/deinit" {
+    const allocator = testing.allocator;
+
+    var ring_buffer: RingBuffer(u8) = .empty;
     defer ring_buffer.deinit(allocator);
 }
 
