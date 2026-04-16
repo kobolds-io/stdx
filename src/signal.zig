@@ -17,7 +17,7 @@ pub fn Signal(comptime T: type) type {
         io: std.Io,
 
         pub fn new(io: std.Io) Self {
-            return Self{
+            return .{
                 .cond = .init,
                 .mutex = .init,
                 .ready = false,
@@ -34,65 +34,57 @@ pub fn Signal(comptime T: type) type {
                 self.cond.waitUncancelable(self.io, &self.mutex);
             }
 
-            assert(self.value != null);
-
-            return self.value.?;
+            const value = self.value orelse unreachable;
+            return value;
         }
 
         pub fn send(self: *Self, value: T) void {
             self.mutex.lockUncancelable(self.io);
             defer self.mutex.unlock(self.io);
 
-            // enforce that this is a oneshot operation
+            assert(!self.ready);
             assert(self.value == null);
 
             self.value = value;
             self.ready = true;
-
             self.cond.signal(self.io);
         }
 
         pub fn tryReceive(self: *Self, timeout_ns: u64) SignalError!T {
-            self.mutex.lockUncancelable(self.io);
-            defer self.mutex.unlock(self.io);
+            const poll_ns = 100_000; // 100us
 
             var now_ts = std.Io.Clock.now(.awake, self.io);
-            const start = now_ts.nanoseconds;
-            const deadline = start + timeout_ns;
+            const deadline = now_ts.nanoseconds + timeout_ns;
 
-            while (!self.ready) {
+            while (true) {
+                self.mutex.lockUncancelable(self.io);
+                if (self.ready) {
+                    const value = self.value orelse unreachable;
+                    self.mutex.unlock(self.io);
+                    return value;
+                }
+                self.mutex.unlock(self.io);
+
                 now_ts = std.Io.Clock.now(.awake, self.io);
-                if (now_ts.nanoseconds >= deadline) return SignalError.Timeout;
+                if (now_ts.nanoseconds >= deadline) {
+                    return SignalError.Timeout;
+                }
 
-                self.cond.wait(self.io, &self.mutex) catch {
+                const remaining = deadline - now_ts.nanoseconds;
+                self.io.sleep(.fromNanoseconds(@min(poll_ns, remaining)), .awake) catch {
                     return SignalError.Timeout;
                 };
             }
-
-            assert(self.value != null);
-            return self.value.?;
         }
 
         pub fn trySend(self: *Self, value: T, timeout_ns: u64) SignalError!void {
+            _ = timeout_ns;
+
             self.mutex.lockUncancelable(self.io);
             defer self.mutex.unlock(self.io);
 
-            // we enforce that this is a true one shot and can only be used between a single
-            // sender and a single receiever
+            assert(!self.ready);
             assert(self.value == null);
-
-            var now_ts = std.Io.Clock.now(.awake, self.io);
-            const start = now_ts.nanoseconds;
-            const deadline = start + timeout_ns;
-
-            while (self.value != null) {
-                now_ts = std.Io.Clock.now(.awake, self.io);
-                if (now_ts.nanoseconds >= deadline) return SignalError.Timeout;
-
-                self.cond.wait(self.io, &self.mutex) catch {
-                    return SignalError.Timeout;
-                };
-            }
 
             self.value = value;
             self.ready = true;
@@ -109,7 +101,6 @@ test "basic operation" {
     signal.send(want);
 
     const got = signal.receive();
-
     try testing.expectEqual(want, got);
 }
 
@@ -119,7 +110,7 @@ test "multithreaded support" {
 
     var signal = Signal(usize).new(io);
 
-    const sender = struct {
+    const Sender = struct {
         fn send(sig: *Signal(usize), value: usize) void {
             sig.send(value);
         }
@@ -129,67 +120,56 @@ test "multithreaded support" {
         }
     };
 
-    const receiever = struct {
-        fn receieve(sig: *Signal(usize), res: *usize) void {
-            const got = sig.receive();
-            res.* = got;
+    const Receiver = struct {
+        fn receive(sig: *Signal(usize), res: *usize) void {
+            res.* = sig.receive();
         }
 
         fn tryReceive(sig: *Signal(usize), res: *usize, timeout_ns: u64) void {
-            const got = sig.tryReceive(timeout_ns) catch unreachable;
-            res.* = got;
+            res.* = sig.tryReceive(timeout_ns) catch unreachable;
         }
     };
 
-    var result: usize = undefined;
-
+    var result: usize = 0;
     try testing.expect(want != result);
 
-    const receieve_thread = try std.Thread.spawn(.{}, receiever.receieve, .{ &signal, &result });
-    defer receieve_thread.join();
+    const receive_thread = try std.Thread.spawn(.{}, Receiver.receive, .{ &signal, &result });
+    defer receive_thread.join();
 
-    const send_thread = try std.Thread.spawn(.{}, sender.send, .{ &signal, want });
+    const send_thread = try std.Thread.spawn(.{}, Sender.send, .{ &signal, want });
     defer send_thread.join();
 
     const timeout_ns = 1 * std.time.ns_per_s;
     var now_ts = std.Io.Clock.now(.awake, io);
-    var deadline = now_ts.nanoseconds + timeout_ns;
+    const deadline = now_ts.nanoseconds + timeout_ns;
 
-    while (now_ts.nanoseconds < deadline) {
-        defer now_ts = std.Io.Clock.now(.awake, io);
-        if (want != result) continue;
-        break;
-    } else {
-        return error.TestExceededDeadline;
+    while (true) {
+        if (result == want) break;
+        now_ts = std.Io.Clock.now(.awake, io);
+        if (now_ts.nanoseconds >= deadline) return error.TestExceededDeadline;
+        io.sleep(.fromNanoseconds(100_000), .awake) catch {};
     }
 
-    // Have a kind of BS test here to evaluate the result
     try testing.expectEqual(want, result);
 
-    // ----
-
-    // reset the world
     result = 0;
-    now_ts = std.Io.Clock.now(.awake, io);
-    deadline = now_ts.nanoseconds + timeout_ns;
-
-    try testing.expect(want != result);
-
     var timed_signal = Signal(usize).new(io);
-    const try_receive_thread = try std.Thread.spawn(.{}, receiever.tryReceive, .{ &timed_signal, &result, timeout_ns });
+
+    const try_receive_thread = try std.Thread.spawn(.{}, Receiver.tryReceive, .{ &timed_signal, &result, timeout_ns });
     defer try_receive_thread.join();
 
-    const try_send_thread = try std.Thread.spawn(.{}, sender.trySend, .{ &timed_signal, want, timeout_ns });
+    const try_send_thread = try std.Thread.spawn(.{}, Sender.trySend, .{ &timed_signal, want, timeout_ns });
     defer try_send_thread.join();
 
     now_ts = std.Io.Clock.now(.awake, io);
-    while (now_ts.nanoseconds < deadline) {
-        if (want != result) continue;
-        break;
-    } else {
-        return error.TestExceededDeadline;
+    const deadline2 = now_ts.nanoseconds + timeout_ns;
+
+    while (true) {
+        if (result == want) break;
+        now_ts = std.Io.Clock.now(.awake, io);
+        if (now_ts.nanoseconds >= deadline2) return error.TestExceededDeadline;
+        io.sleep(.fromNanoseconds(100_000), .awake) catch {};
     }
 
-    // Have a kind of BS test here to evaluate the result
     try testing.expectEqual(want, result);
 }
