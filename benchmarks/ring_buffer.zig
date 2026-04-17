@@ -21,7 +21,7 @@ const BenchmarkRingBufferPrepend = struct {
         };
     }
 
-    pub fn run(self: Self, _: std.mem.Allocator) void {
+    pub fn run(self: *Self, _: std.mem.Allocator) void {
         // prepend every data point in the list into the ring buffer
         for (self.list.items) |data| {
             self.ring_buffer.prependAssumeCapacity(data);
@@ -45,7 +45,7 @@ const BenchmarkRingBufferEnqueue = struct {
         };
     }
 
-    pub fn run(self: Self, _: std.mem.Allocator) void {
+    pub fn run(self: *Self, _: std.mem.Allocator) void {
         // enqueue every data point in the list into the ring buffer
         for (self.list.items) |data| {
             self.ring_buffer.enqueueAssumeCapacity(data);
@@ -69,7 +69,7 @@ const BenchmarkRingBufferEnqueueMany = struct {
         };
     }
 
-    pub fn run(self: Self, _: std.mem.Allocator) void {
+    pub fn run(self: *Self, _: std.mem.Allocator) void {
         // enqueue every data point in the list into the ring buffer
         self.ring_buffer.enqueueSliceAssumeCapacity(self.list.items);
 
@@ -91,7 +91,7 @@ const BenchmarkRingBufferDequeue = struct {
         };
     }
 
-    pub fn run(self: Self, _: std.mem.Allocator) void {
+    pub fn run(self: *Self, _: std.mem.Allocator) void {
         while (self.ring_buffer.dequeue()) |_| {}
         assert(self.ring_buffer.isEmpty());
     }
@@ -110,7 +110,7 @@ const BenchmarkRingBufferDequeueMany = struct {
         };
     }
 
-    pub fn run(self: Self, _: std.mem.Allocator) void {
+    pub fn run(self: *Self, _: std.mem.Allocator) void {
         const n = self.ring_buffer.dequeueSlice(self.list.items);
 
         assert(self.ring_buffer.isEmpty());
@@ -133,7 +133,7 @@ const BenchmarkRingBufferConcatenate = struct {
         };
     }
 
-    pub fn run(self: Self, _: std.mem.Allocator) void {
+    pub fn run(self: *Self, _: std.mem.Allocator) void {
         const other_count = self.ring_buffer_other.count;
         _ = self.ring_buffer.concatenateAssumeCapacity(self.ring_buffer_other);
         assert(ring_buffer_concatenate.count == other_count);
@@ -155,7 +155,7 @@ const BenchmarkRingBufferCopy = struct {
         };
     }
 
-    pub fn run(self: Self, _: std.mem.Allocator) void {
+    pub fn run(self: *Self, _: std.mem.Allocator) void {
         _ = self.ring_buffer.copyAssumeCapacity(self.ring_buffer_other);
     }
 };
@@ -177,7 +177,7 @@ const BenchmarkRingBufferSort = struct {
         };
     }
 
-    pub fn run(self: Self, _: std.mem.Allocator) void {
+    pub fn run(self: *Self, _: std.mem.Allocator) void {
         self.ring_buffer.sort(Self.comparator);
     }
 };
@@ -244,13 +244,19 @@ fn beforeEachCopy() void {
 
 fn beforeEachSort() void {
     ring_buffer_sort.linearize();
-    std.crypto.random.shuffle(usize, ring_buffer_sort.buffer[0..ring_buffer_sort.count]);
+    var sort_prng = std.Random.DefaultPrng.init(0xdead_beef);
+    const rand = sort_prng.random();
+    std.Random.shuffle(
+        rand,
+        usize,
+        ring_buffer_sort.buffer[0..ring_buffer_sort.count],
+    );
 
-    // this is a sanity check
     assert(ring_buffer_sort.count <= ring_buffer_sort.capacity);
 }
 
 test "RingBuffer benchmarks" {
+    const io = testing.io;
     var bench = zbench.Benchmark.init(
         std.testing.allocator,
         .{ .iterations = constants.benchmark_max_iterations },
@@ -301,7 +307,9 @@ test "RingBuffer benchmarks" {
     defer ring_buffer_sort.deinit(allocator);
 
     while (!ring_buffer_sort.isFull()) {
-        const random_int = std.crypto.random.int(usize);
+        var buf: [@sizeOf(usize)]u8 = undefined;
+        io.random(&buf);
+        const random_int = std.mem.readInt(usize, &buf, .big);
         try ring_buffer_sort.enqueue(allocator, random_int);
     }
 
@@ -367,16 +375,19 @@ test "RingBuffer benchmarks" {
         &BenchmarkRingBufferPrepend.new(&data_list, &ring_buffer_prepend),
         .{},
     );
+
     try bench.addParam(
         ring_buffer_enqueue_title,
         &BenchmarkRingBufferEnqueue.new(&data_list, &ring_buffer_enqueue),
         .{},
     );
+
     try bench.addParam(
         ring_buffer_enqueueMany_title,
         &BenchmarkRingBufferEnqueueMany.new(&data_list, &ring_buffer_enqueueMany),
         .{},
     );
+
     try bench.addParam(
         ring_buffer_dequeue_title,
         &BenchmarkRingBufferDequeue.new(&data_list, &ring_buffer_dequeue),
@@ -386,6 +397,7 @@ test "RingBuffer benchmarks" {
             },
         },
     );
+
     try bench.addParam(
         ring_buffer_dequeueMany_title,
         &BenchmarkRingBufferDequeueMany.new(&data_list, &ring_buffer_dequeueMany),
@@ -395,6 +407,7 @@ test "RingBuffer benchmarks" {
             },
         },
     );
+
     try bench.addParam(
         ring_buffer_concatenate_title,
         &BenchmarkRingBufferConcatenate.new(
@@ -408,6 +421,7 @@ test "RingBuffer benchmarks" {
             },
         },
     );
+
     try bench.addParam(
         ring_buffer_copy_title,
         &BenchmarkRingBufferCopy.new(
@@ -421,6 +435,7 @@ test "RingBuffer benchmarks" {
             },
         },
     );
+
     try bench.addParam(
         ring_buffer_sort_title,
         &BenchmarkRingBufferSort.new(
@@ -434,12 +449,13 @@ test "RingBuffer benchmarks" {
         },
     );
 
-    var stderr = std.fs.File.stderr().writerStreaming(&.{});
-    const writer = &stderr.interface;
+    const stderr = std.Io.File.stderr();
+    var stderr_writer = stderr.writerStreaming(io, &.{});
+    const writer = &stderr_writer.interface;
 
     try writer.writeAll("\n");
     try writer.writeAll("|-----------------------|\n");
     try writer.writeAll("| RingBuffer Benchmarks |\n");
     try writer.writeAll("|-----------------------|\n");
-    try bench.run(writer);
+    try bench.run(io, stderr);
 }
