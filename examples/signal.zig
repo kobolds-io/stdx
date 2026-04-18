@@ -84,7 +84,7 @@ const AsyncCalculator = struct {
         ready_channel.send(true);
         while (true) {
             // check if the close channel has received a close command
-            const close_channel_received = self.close_channel.tryReceive(0) catch false;
+            const close_channel_received = self.close_channel.tryReceive(.fromMilliseconds(0)) catch false;
             if (close_channel_received) {
                 self.state = .closing;
             }
@@ -141,7 +141,7 @@ pub fn main(init: std.process.Init) !void {
     defer calculator.close();
     calculator_thread.detach();
 
-    _ = ready_channel.tryReceive(100 * std.time.ns_per_ms) catch |err| {
+    _ = ready_channel.tryReceive(.fromMilliseconds(100)) catch |err| {
         calculator.close();
         return err;
     };

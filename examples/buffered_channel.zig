@@ -121,7 +121,7 @@ const UploadManager = struct {
             }
             now = std.Io.Timestamp.now(self.io, .awake);
 
-            const event = self.uploader_events.tryReceive(100_000, null) catch continue;
+            const event = self.uploader_events.tryReceive(.fromMicroseconds(100), null) catch continue;
             switch (event.label) {
                 .done => {
                     if (self.uploaders.fetchRemove(event.uploader_id)) |entry| {

@@ -24,7 +24,7 @@ const BenchmarkUnbufferedChannelSendReceive = struct {
     pub fn run(self: *Self, _: std.mem.Allocator) void {
         for (self.list.items) |data| {
             self.channel.send(data);
-            const v = self.channel.tryReceive(1 * std.time.ns_per_ms) catch unreachable;
+            const v = self.channel.tryReceive(.fromMilliseconds(1)) catch unreachable;
             assert(v == data);
         }
     }
