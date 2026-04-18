@@ -21,7 +21,7 @@ const BenchmarkMemoryPoolCreate = struct {
         };
     }
 
-    pub fn run(self: Self, _: std.mem.Allocator) void {
+    pub fn run(self: *Self, _: std.mem.Allocator) void {
         for (self.list.items) |_| {
             _ = self.memory_pool.create() catch unreachable;
         }
@@ -41,7 +41,7 @@ const BenchmarkMemoryPoolUnsafeCreate = struct {
         };
     }
 
-    pub fn run(self: Self, _: std.mem.Allocator) void {
+    pub fn run(self: *Self, _: std.mem.Allocator) void {
         for (self.list.items) |_| {
             _ = self.memory_pool.unsafeCreate() catch unreachable;
         }
@@ -73,6 +73,7 @@ fn beforeEachUnsafeCreate() void {
 }
 
 test "MemoryPool benchmarks" {
+    const io = testing.io;
     var bench = zbench.Benchmark.init(
         std.testing.allocator,
         .{ .iterations = constants.benchmark_max_iterations },
@@ -91,10 +92,10 @@ test "MemoryPool benchmarks" {
         data_list.appendAssumeCapacity(i);
     }
 
-    memory_pool_create = try MemoryPool(usize).init(allocator, data_list.capacity);
+    memory_pool_create = try MemoryPool(usize).init(allocator, io, data_list.capacity);
     defer memory_pool_create.deinit();
 
-    memory_pool_unsafe_create = try MemoryPool(usize).init(allocator, data_list.capacity);
+    memory_pool_unsafe_create = try MemoryPool(usize).init(allocator, io, data_list.capacity);
     defer memory_pool_unsafe_create.deinit();
 
     const memory_pool_create_title = try std.fmt.allocPrint(
@@ -130,12 +131,13 @@ test "MemoryPool benchmarks" {
         },
     );
 
-    var stderr = std.fs.File.stderr().writerStreaming(&.{});
-    const writer = &stderr.interface;
+    const stderr = std.Io.File.stderr();
+    var stderr_writer = stderr.writerStreaming(io, &.{});
+    const writer = &stderr_writer.interface;
 
     try writer.writeAll("\n");
     try writer.writeAll("|-----------------------|\n");
     try writer.writeAll("| MemoryPool Benchmarks |\n");
     try writer.writeAll("|-----------------------|\n");
-    try bench.run(writer);
+    try bench.run(io, stderr);
 }
