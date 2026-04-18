@@ -50,11 +50,11 @@ pub fn Signal(comptime T: type) type {
             self.cond.signal(self.io);
         }
 
-        pub fn tryReceive(self: *Self, timeout_ns: u64) SignalError!T {
+        pub fn tryReceive(self: *Self, timeout: std.Io.Duration) SignalError!T {
             const poll_ns = 100_000; // 100us
 
             var now_ts = std.Io.Clock.now(.awake, self.io);
-            const deadline = now_ts.nanoseconds + timeout_ns;
+            const deadline = now_ts.nanoseconds + timeout.nanoseconds;
 
             while (true) {
                 self.mutex.lockUncancelable(self.io);
@@ -77,8 +77,8 @@ pub fn Signal(comptime T: type) type {
             }
         }
 
-        pub fn trySend(self: *Self, value: T, timeout_ns: u64) SignalError!void {
-            _ = timeout_ns;
+        pub fn trySend(self: *Self, value: T, timeout: std.Io.Duration) SignalError!void {
+            _ = timeout;
 
             self.mutex.lockUncancelable(self.io);
             defer self.mutex.unlock(self.io);
@@ -115,8 +115,8 @@ test "multithreaded support" {
             sig.send(value);
         }
 
-        fn trySend(sig: *Signal(usize), value: usize, timeout_ns: u64) void {
-            sig.trySend(value, timeout_ns) catch unreachable;
+        fn trySend(sig: *Signal(usize), value: usize, timeout: std.Io.Duration) void {
+            sig.trySend(value, timeout) catch unreachable;
         }
     };
 
@@ -125,8 +125,8 @@ test "multithreaded support" {
             res.* = sig.receive();
         }
 
-        fn tryReceive(sig: *Signal(usize), res: *usize, timeout_ns: u64) void {
-            res.* = sig.tryReceive(timeout_ns) catch unreachable;
+        fn tryReceive(sig: *Signal(usize), res: *usize, delay: std.Io.Duration) void {
+            res.* = sig.tryReceive(delay) catch unreachable;
         }
     };
 
@@ -139,9 +139,9 @@ test "multithreaded support" {
     const send_thread = try std.Thread.spawn(.{}, Sender.send, .{ &signal, want });
     defer send_thread.join();
 
-    const timeout_ns = 1 * std.time.ns_per_s;
+    const timeout = std.Io.Duration.fromSeconds(1);
     var now_ts = std.Io.Clock.now(.awake, io);
-    const deadline = now_ts.nanoseconds + timeout_ns;
+    const deadline = now_ts.nanoseconds + timeout.nanoseconds;
 
     while (true) {
         if (result == want) break;
@@ -155,14 +155,14 @@ test "multithreaded support" {
     result = 0;
     var timed_signal = Signal(usize).new(io);
 
-    const try_receive_thread = try std.Thread.spawn(.{}, Receiver.tryReceive, .{ &timed_signal, &result, timeout_ns });
+    const try_receive_thread = try std.Thread.spawn(.{}, Receiver.tryReceive, .{ &timed_signal, &result, timeout });
     defer try_receive_thread.join();
 
-    const try_send_thread = try std.Thread.spawn(.{}, Sender.trySend, .{ &timed_signal, want, timeout_ns });
+    const try_send_thread = try std.Thread.spawn(.{}, Sender.trySend, .{ &timed_signal, want, timeout });
     defer try_send_thread.join();
 
     now_ts = std.Io.Clock.now(.awake, io);
-    const deadline2 = now_ts.nanoseconds + timeout_ns;
+    const deadline2 = now_ts.nanoseconds + timeout.nanoseconds;
 
     while (true) {
         if (result == want) break;

@@ -145,7 +145,7 @@ pub fn Producer(comptime T: type) type {
             ready.send(true);
             while (true) {
                 // check if we have received a signale to close the topic
-                const signal = self.close_channel.tryReceive(0) catch false;
+                const signal = self.close_channel.tryReceive(.fromMilliseconds(0)) catch false;
                 if (signal) {
                     // log.info("signal received to stop producer {}", .{self.id});
                     // log.debug("producer {}: produced {} items", .{ self.id, self.produced_count });
@@ -212,7 +212,7 @@ pub fn Worker(comptime T: type) type {
             ready.send(true);
             while (true) {
                 // check if we have received a signale to close the topic
-                const signal = self.close_channel.tryReceive(0) catch false;
+                const signal = self.close_channel.tryReceive(.fromMilliseconds(0)) catch false;
                 if (signal) {
                     // log.err("signal received to stop worker {}", .{self.id});
                     // log.err("worker {}: processed {} items", .{ self.id, self.processed_count });

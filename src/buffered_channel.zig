@@ -55,9 +55,9 @@ pub fn BufferedChannel(comptime T: type) type {
             return value;
         }
 
-        pub fn trySend(self: *Self, value: T, timeout_ns: u64, cancel: ?*CancellationToken) !void {
+        pub fn trySend(self: *Self, value: T, delay: std.Io.Duration, cancel: ?*CancellationToken) !void {
             var now_ts = std.Io.Clock.now(.awake, self.io);
-            const deadline = now_ts.nanoseconds + timeout_ns;
+            const deadline = now_ts.nanoseconds + delay.nanoseconds;
 
             while (true) {
                 // Check cancellation before acquiring lock
@@ -86,9 +86,9 @@ pub fn BufferedChannel(comptime T: type) type {
             }
         }
 
-        pub fn tryReceive(self: *Self, timeout_ns: u64, cancel: ?*CancellationToken) !T {
+        pub fn tryReceive(self: *Self, timeout: std.Io.Duration, cancel: ?*CancellationToken) !T {
             var now_ts = std.Io.Clock.now(.awake, self.io);
-            const deadline = now_ts.nanoseconds + timeout_ns;
+            const deadline = now_ts.nanoseconds + timeout.nanoseconds;
 
             while (true) {
                 // Check cancellation before acquiring lock
@@ -210,17 +210,22 @@ test "receive timeouts and cancellation" {
     defer channel.deinit(allocator);
 
     const receiver = struct {
-        pub fn do(running: *bool, chan: *BufferedChannel(usize), delay: u64, cancel_token: *CancellationToken) void {
+        pub fn do(
+            running: *bool,
+            chan: *BufferedChannel(usize),
+            delay: std.Io.Duration,
+            cancel_token: *CancellationToken,
+        ) void {
             running.* = true;
             assert(!cancel_token.isCancelled());
             testing.expectError(error.Cancelled, chan.tryReceive(delay, cancel_token)) catch unreachable;
         }
     }.do;
 
-    try testing.expectError(error.Timeout, channel.tryReceive(1, null));
+    try testing.expectError(error.Timeout, channel.tryReceive(.fromMilliseconds(1), null));
 
     var cancel_token = CancellationToken{};
-    const delay = 100 * std.time.ns_per_ms;
+    const delay = std.Io.Duration.fromMilliseconds(100);
     var running = false;
     const cancel_th = try std.Thread.spawn(.{}, receiver, .{ &running, &channel, delay, &cancel_token });
     defer cancel_th.join();
@@ -243,17 +248,22 @@ test "send timeouts and cancellation" {
     }
 
     const sender = struct {
-        pub fn do(running: *bool, chan: *BufferedChannel(usize), delay: u64, cancel_token: *CancellationToken) void {
+        pub fn do(
+            running: *bool,
+            chan: *BufferedChannel(usize),
+            delay: std.Io.Duration,
+            cancel_token: *CancellationToken,
+        ) void {
             running.* = true;
             assert(!cancel_token.isCancelled());
             testing.expectError(error.Cancelled, chan.trySend(42069, delay, cancel_token)) catch unreachable;
         }
     }.do;
 
-    try testing.expectError(error.Timeout, channel.trySend(42069, 1, null));
+    try testing.expectError(error.Timeout, channel.trySend(42069, .fromMilliseconds(1), null));
 
     var cancel_token = CancellationToken{};
-    const delay = 100 * std.time.ns_per_ms;
+    const delay = std.Io.Duration.fromMilliseconds(100);
     var running = false;
     const cancel_th = try std.Thread.spawn(.{}, sender, .{ &running, &channel, delay, &cancel_token });
     defer cancel_th.join();

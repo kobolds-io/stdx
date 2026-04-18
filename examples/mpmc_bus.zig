@@ -182,7 +182,7 @@ pub fn Bus(comptime T: type) type {
             ready.send(true);
             while (true) {
                 // check if we have received a signale to close the topic
-                const signal = self.close_channel.tryReceive(0) catch false;
+                const signal = self.close_channel.tryReceive(.fromMilliseconds(0)) catch false;
                 if (signal) {
                     return;
                 }
@@ -252,7 +252,7 @@ pub fn Consumer(comptime T: type) type {
             ready.send(true);
             while (true) {
                 // check if we have received a signale to close the topic
-                const signal = self.close_channel.tryReceive(0) catch false;
+                const signal = self.close_channel.tryReceive(.fromMilliseconds(0)) catch false;
                 if (signal) {
                     return;
                 }

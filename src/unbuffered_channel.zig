@@ -52,9 +52,9 @@ pub fn UnbufferedChannel(comptime T: type) type {
             return result;
         }
 
-        pub fn tryReceive(self: *Self, timeout_ns: u64) !T {
+        pub fn tryReceive(self: *Self, timeout: std.Io.Duration) !T {
             var now_ts = std.Io.Clock.now(.awake, self.io);
-            const deadline = now_ts.nanoseconds + timeout_ns;
+            const deadline = now_ts.nanoseconds + timeout.nanoseconds;
 
             while (true) {
                 self.mutex.lockUncancelable(self.io);
@@ -96,7 +96,7 @@ test "good behavior" {
     const th = try std.Thread.spawn(.{}, testerFn, .{ &channel, want });
     defer th.join();
 
-    const got = try channel.tryReceive(1 * std.time.ns_per_s);
+    const got = try channel.tryReceive(.fromSeconds(1));
     try testing.expectEqual(want, got);
 }
 
@@ -113,7 +113,7 @@ test "bad behavior" {
     var channel = UnbufferedChannel(u32).new(io);
     _ = try std.Thread.spawn(.{}, testerFn, .{ &channel, io, 9999 });
 
-    try testing.expectError(error.Timeout, channel.tryReceive(1 * std.time.ns_per_us));
+    try testing.expectError(error.Timeout, channel.tryReceive(.fromMicroseconds(1)));
 }
 
 test "receive multiple values" {
