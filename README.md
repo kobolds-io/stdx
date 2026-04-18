@@ -33,10 +33,10 @@ All data structures, algorithms and utilities included in this library are writt
 
 ## Usage
 
-| zig version | kid version |
-|-------------|-------------|
-| 0.15.x      | 0.2.1       |
-| 0.16.0      | 0.3.0       |
+| zig version | stdx version |
+|-------------|--------------|
+| 0.15.x      | 0.2.1        |
+| 0.16.0      | 0.3.0        |
 
 
 Using `stdx` is just as simple as using any other `zig` dependency.
