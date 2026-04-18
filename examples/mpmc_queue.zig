@@ -21,7 +21,7 @@ const sardine = Dog{
 // This is the type that will be processed
 const VALUE_TYPE: type = *const Dog;
 const TOPIC_QUEUE_SIZE = 10_000;
-const PRODUCER_QUEUE_SIZE = 5_0000;
+const PRODUCER_QUEUE_SIZE = 5_000;
 const WORKER_QUEUE_SIZE = 5_000;
 const ITERATIONS = 100_000;
 const WORKER_COUNT = 100;
@@ -33,7 +33,7 @@ pub fn Topic(comptime T: type) type {
         const Self = @This();
 
         allocator: std.mem.Allocator,
-        mutex: std.Thread.Mutex,
+        mutex: std.Io.Mutex,
         queue: *RingBuffer(T),
 
         pub fn init(allocator: std.mem.Allocator) !Self {
@@ -45,7 +45,7 @@ pub fn Topic(comptime T: type) type {
 
             return Self{
                 .allocator = allocator,
-                .mutex = std.Thread.Mutex{},
+                .mutex = .init,
                 .queue = queue,
             };
         }
@@ -63,15 +63,16 @@ pub fn Producer(comptime T: type) type {
         const Self = @This();
 
         allocator: std.mem.Allocator,
+        io: std.Io,
         backpressure: std.array_list.Managed(VALUE_TYPE),
         close_channel: UnbufferedChannel(bool),
         id: usize,
-        mutex: std.Thread.Mutex,
+        mutex: std.Io.Mutex,
         produced_count: u128,
         queue: *RingBuffer(T),
         topic: *Topic(T),
 
-        pub fn init(allocator: std.mem.Allocator, id: usize, topic: *Topic(T)) !Self {
+        pub fn init(allocator: std.mem.Allocator, io: std.Io, id: usize, topic: *Topic(T)) !Self {
             const queue = try allocator.create(RingBuffer(T));
             errdefer allocator.destroy(queue);
 
@@ -80,10 +81,11 @@ pub fn Producer(comptime T: type) type {
 
             return Self{
                 .allocator = allocator,
+                .io = io,
                 .backpressure = std.array_list.Managed(VALUE_TYPE).init(allocator),
-                .close_channel = UnbufferedChannel(bool).new(),
+                .close_channel = UnbufferedChannel(bool).new(io),
                 .id = id,
-                .mutex = .{},
+                .mutex = .init,
                 .produced_count = 0,
                 .queue = queue,
                 .topic = topic,
@@ -97,8 +99,8 @@ pub fn Producer(comptime T: type) type {
         }
 
         pub fn produce(self: *Self, value: T) !void {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
 
             // this should really never happen unless the size of the allocator is fixed. So I've made it
             // fixed size for now.
@@ -121,11 +123,11 @@ pub fn Producer(comptime T: type) type {
             // do nothing if there is nothing to do
             if (self.queue.count == 0) return;
 
-            self.topic.mutex.lock();
-            defer self.topic.mutex.unlock();
+            self.topic.mutex.lockUncancelable(self.io);
+            defer self.topic.mutex.unlock(self.io);
 
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
 
             if (self.backpressure.items.len > 0) {
                 const n = self.backpressure.items.len - self.topic.queue.count;
@@ -151,7 +153,7 @@ pub fn Producer(comptime T: type) type {
                 }
 
                 self.tick() catch unreachable;
-                std.Thread.sleep(1 * std.time.ns_per_us);
+                std.Io.sleep(self.io, .fromMilliseconds(1), .awake) catch unreachable;
             }
         }
 
@@ -171,8 +173,9 @@ pub fn Worker(comptime T: type) type {
         processed_count: u128,
         queue: *RingBuffer(T),
         topic: *Topic(T),
+        io: std.Io,
 
-        pub fn init(allocator: std.mem.Allocator, id: usize, topic: *Topic(T)) !Self {
+        pub fn init(allocator: std.mem.Allocator, io: std.Io, id: usize, topic: *Topic(T)) !Self {
             const queue = try allocator.create(RingBuffer(T));
             errdefer allocator.destroy(queue);
 
@@ -181,7 +184,8 @@ pub fn Worker(comptime T: type) type {
 
             return Self{
                 .allocator = allocator,
-                .close_channel = UnbufferedChannel(bool).new(),
+                .io = io,
+                .close_channel = UnbufferedChannel(bool).new(io),
                 .id = id,
                 .processed_count = 0,
                 .queue = queue,
@@ -195,8 +199,8 @@ pub fn Worker(comptime T: type) type {
         }
 
         pub fn tick(self: *Self) !void {
-            self.topic.mutex.lock();
-            defer self.topic.mutex.unlock();
+            self.topic.mutex.lockUncancelable(self.io);
+            defer self.topic.mutex.unlock(self.io);
 
             _ = self.queue.concatenateAvailable(self.topic.queue);
             while (self.queue.dequeue()) |_| {
@@ -216,7 +220,7 @@ pub fn Worker(comptime T: type) type {
                 }
 
                 self.tick() catch unreachable;
-                std.Thread.sleep(1 * std.time.ns_per_us);
+                std.Io.sleep(self.io, .fromMilliseconds(1), .awake) catch unreachable;
             }
         }
 
@@ -226,8 +230,9 @@ pub fn Worker(comptime T: type) type {
     };
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
@@ -248,7 +253,7 @@ pub fn main() !void {
         const producer = try allocator.create(Producer(VALUE_TYPE));
         errdefer allocator.destroy(producer);
 
-        producer.* = try Producer(VALUE_TYPE).init(allocator, i, &topic);
+        producer.* = try Producer(VALUE_TYPE).init(allocator, io, i, &topic);
         errdefer producer.deinit();
 
         try producers.append(producer);
@@ -258,14 +263,14 @@ pub fn main() !void {
         const worker = try allocator.create(Worker(VALUE_TYPE));
         errdefer allocator.destroy(worker);
 
-        worker.* = try Worker(VALUE_TYPE).init(allocator, i, &topic);
+        worker.* = try Worker(VALUE_TYPE).init(allocator, io, i, &topic);
         errdefer worker.deinit();
 
         try workers.append(worker);
     }
 
     for (producers.items) |producer| {
-        var ready_channel = UnbufferedChannel(bool).new();
+        var ready_channel = UnbufferedChannel(bool).new(io);
 
         const th = try std.Thread.spawn(
             .{},
@@ -279,7 +284,7 @@ pub fn main() !void {
     }
 
     for (workers.items) |worker| {
-        var ready_channel = UnbufferedChannel(bool).new();
+        var ready_channel = UnbufferedChannel(bool).new(io);
 
         const th = try std.Thread.spawn(
             .{},
@@ -292,14 +297,13 @@ pub fn main() !void {
         log.debug("worker {} ready", .{worker.id});
     }
 
-    var timer = try std.time.Timer.start();
-    const start = timer.read();
+    const start = std.Io.Timestamp.now(io, .awake);
 
     for (0..ITERATIONS) |_| {
         for (producers.items) |producer| {
             producer.produce(&sardine) catch {
-                log.err("producer: {} throttling", .{producer.id});
-                std.Thread.sleep(100 * std.time.ns_per_ms);
+                log.warn("producer: {} throttling", .{producer.id});
+                std.Io.sleep(io, .fromMilliseconds(100), .awake) catch unreachable;
                 try producer.produce(&sardine);
             };
         }
@@ -308,7 +312,7 @@ pub fn main() !void {
     var produced_count: u128 = 0;
 
     while (produced_count != ITERATIONS * PRODUCER_COUNT) {
-        std.Thread.sleep(1 * std.time.ns_per_ms);
+        std.Io.sleep(io, .fromMilliseconds(1), .awake) catch unreachable;
         produced_count = 0;
         for (producers.items) |producer| {
             produced_count += producer.produced_count;
@@ -317,15 +321,16 @@ pub fn main() !void {
 
     var processed_count: u128 = 0;
     while (processed_count != produced_count) {
-        std.Thread.sleep(1 * std.time.ns_per_ms);
+        std.Io.sleep(io, .fromMilliseconds(1), .awake) catch unreachable;
         processed_count = 0;
         for (workers.items) |worker| {
             processed_count += worker.processed_count;
         }
     }
 
-    log.err("took {}ms, total iters {}, total processed {}, total produced {}", .{
-        (timer.read() - start) / std.time.ns_per_ms,
+    const end = std.Io.Timestamp.now(io, .awake);
+    log.info("took {}ms, total iters {}, total processed {}, total produced {}", .{
+        @divTrunc(end.nanoseconds - start.nanoseconds, std.time.ns_per_ms),
         ITERATIONS,
         processed_count,
         produced_count,
@@ -333,21 +338,21 @@ pub fn main() !void {
 
     const expected_processed = ITERATIONS * PRODUCER_COUNT;
 
-    log.err("expected processed {}, actual processed {}, difference {}", .{
+    log.info("expected processed {}, actual processed {}, difference {}", .{
         expected_processed,
         processed_count,
         expected_processed - processed_count,
     });
 
     for (producers.items) |producer| {
-        log.err("producer {} produced {}", .{ producer.id, producer.produced_count });
+        log.info("producer {} produced {}", .{ producer.id, producer.produced_count });
         producer.close();
         producer.deinit();
         allocator.destroy(producer);
     }
 
     for (workers.items) |worker| {
-        log.err("worker {} processed {}", .{ worker.id, worker.processed_count });
+        log.info("worker {} processed {}", .{ worker.id, worker.processed_count });
         worker.close();
         worker.deinit();
         allocator.destroy(worker);

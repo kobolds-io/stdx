@@ -36,12 +36,13 @@ const AsyncCalculator = struct {
 
     close_channel: UnbufferedChannel(bool),
     done_channel: UnbufferedChannel(bool),
-    mutex: std.Thread.Mutex,
+    mutex: std.Io.Mutex,
     allocator: std.mem.Allocator,
     requests: *RingBuffer(Request),
     state: CalculatorState,
+    io: std.Io,
 
-    pub fn init(allocator: std.mem.Allocator) !Self {
+    pub fn init(allocator: std.mem.Allocator, io: std.Io) !Self {
         const requests = try allocator.create(RingBuffer(Request));
         errdefer allocator.destroy(requests);
 
@@ -49,12 +50,13 @@ const AsyncCalculator = struct {
         errdefer requests.deinit(allocator);
 
         return Self{
-            .close_channel = UnbufferedChannel(bool).new(),
-            .done_channel = UnbufferedChannel(bool).new(),
-            .mutex = .{},
+            .close_channel = UnbufferedChannel(bool).new(io),
+            .done_channel = UnbufferedChannel(bool).new(io),
+            .mutex = .init,
             .requests = requests,
             .state = .closed,
             .allocator = allocator,
+            .io = io,
         };
     }
 
@@ -89,15 +91,15 @@ const AsyncCalculator = struct {
 
             switch (self.state) {
                 .running => {
-                    self.mutex.lock();
-                    defer self.mutex.unlock();
+                    self.mutex.lockUncancelable(self.io);
+                    defer self.mutex.unlock(self.io);
 
                     while (self.requests.dequeue()) |req| {
                         AsyncCalculator.handleRequest(req);
                     }
 
                     // This is the tick rate and completely arbitrary
-                    std.Thread.sleep(1 * std.time.ns_per_ms);
+                    self.io.sleep(.fromMilliseconds(1), .awake) catch unreachable;
                 },
                 .closing => {
                     self.state = .closed;
@@ -113,8 +115,8 @@ const AsyncCalculator = struct {
         switch (self.state) {
             .closed, .closing => return,
             else => {
-                self.mutex.lock();
-                defer self.mutex.unlock();
+                self.mutex.lockUncancelable(self.io);
+                defer self.mutex.unlock(self.io);
 
                 self.close_channel.send(true);
             },
@@ -124,14 +126,15 @@ const AsyncCalculator = struct {
     }
 };
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
     // spawn the async calculator
-    var ready_channel = UnbufferedChannel(bool).new();
-    var calculator = try AsyncCalculator.init(allocator);
+    var ready_channel = UnbufferedChannel(bool).new(io);
+    var calculator = try AsyncCalculator.init(allocator, io);
     defer calculator.deinit();
 
     const calculator_thread = try std.Thread.spawn(.{}, AsyncCalculator.run, .{ &calculator, &ready_channel });
@@ -152,19 +155,19 @@ pub fn main() !void {
     defer requests.deinit();
 
     // everything is setup now
-    var timer = try std.time.Timer.start();
-    const enqueue_start = timer.read();
+    // var timestamp = try std.Io.Timestamp.now(io, .awake);
+    const enqueue_start = std.Io.Timestamp.now(io, .awake);
 
     // enqueue all the requests at once
     {
-        calculator.mutex.lock();
-        defer calculator.mutex.unlock();
+        calculator.mutex.lockUncancelable(io);
+        defer calculator.mutex.unlock(io);
 
         for (0..ITERATIONS) |_| {
             const signal = try allocator.create(Signal(Reply));
             errdefer allocator.destroy(signal);
 
-            signal.* = Signal(Reply).new();
+            signal.* = Signal(Reply).new(io);
 
             try signals.append(signal);
 
@@ -181,8 +184,8 @@ pub fn main() !void {
         }
     }
 
-    const enqueue_end = timer.read();
-    const await_start = timer.read();
+    const enqueue_end = std.Io.Timestamp.now(io, .awake);
+    const await_start = std.Io.Timestamp.now(io, .awake);
 
     // This is the main thread handling each request it received
     for (requests.items) |req| {
@@ -192,12 +195,12 @@ pub fn main() !void {
         allocator.destroy(req.signal);
     }
 
-    const await_end = timer.read();
+    const await_end = std.Io.Timestamp.now(io, .awake);
 
-    log.err("total_time: {}ms, enqueue_time: {}ms, await_time {}ms, total iters {}", .{
-        (await_end - enqueue_start) / std.time.ns_per_ms,
-        (enqueue_end - enqueue_start) / std.time.ns_per_ms,
-        (await_end - await_start) / std.time.ns_per_ms,
+    log.info("total_time: {}ms, enqueue_time: {}ms, await_time {}ms, total iters {}", .{
+        @divTrunc(await_end.nanoseconds - enqueue_start.nanoseconds, std.time.ns_per_ms),
+        @divTrunc(enqueue_end.nanoseconds - enqueue_start.nanoseconds, std.time.ns_per_ms),
+        @divTrunc(await_end.nanoseconds - await_start.nanoseconds, std.time.ns_per_ms),
         ITERATIONS,
     });
 }
