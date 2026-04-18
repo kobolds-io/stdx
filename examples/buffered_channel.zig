@@ -28,13 +28,13 @@ const FileUploader = struct {
             }
 
             // random delay to simulate upload time
-            const delay = rand.intRangeAtMost(i64, 10, 250);
+            const delay = rand.intRangeAtMost(i64, 5, 100);
 
             const end = @min(i + 5, self.bytes.len);
             const chunk = self.bytes[i..end];
             _ = chunk;
 
-            const duration = std.Io.Duration.fromMilliseconds(delay * std.time.ns_per_ms);
+            const duration = std.Io.Duration.fromMilliseconds(delay);
             std.Io.sleep(io, duration, .awake) catch unreachable;
             total_time_elapsed += delay;
 
@@ -99,7 +99,11 @@ const UploadManager = struct {
             try self.uploaders.put(id, file_uploader);
 
             // spawn a thread where the file is uploaded by the uploader
-            const th = try std.Thread.spawn(.{}, FileUploader.upload, .{ file_uploader, self.io, &self.cancel_token });
+            const th = try std.Thread.spawn(.{}, FileUploader.upload, .{
+                file_uploader,
+                self.io,
+                &self.cancel_token,
+            });
             th.detach();
         }
 
@@ -173,5 +177,5 @@ pub fn main(init: std.process.Init) !void {
     defer upload_manager.deinit();
 
     // Change the second argument to change the global timeout
-    try upload_manager.run(100, 3_000);
+    try upload_manager.run(10, 3_000);
 }
