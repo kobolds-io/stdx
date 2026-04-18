@@ -41,9 +41,12 @@ pub fn MemoryPool(comptime T: type) type {
         free_list: RingBuffer(*T),
 
         /// A mutex used for thread safe operations
-        mutex: std.Thread.Mutex,
+        mutex: std.Io.Mutex,
 
-        pub fn init(allocator: std.mem.Allocator, capacity: usize) !Self {
+        /// The underlying io implementation
+        io: std.Io,
+
+        pub fn init(allocator: std.mem.Allocator, io: std.Io, capacity: usize) !Self {
             var free_queue = try RingBuffer(*T).initCapacity(allocator, capacity);
             errdefer free_queue.deinit(allocator);
 
@@ -73,7 +76,8 @@ pub fn MemoryPool(comptime T: type) type {
                 .capacity = capacity,
                 .free_list = free_queue,
                 .backing_buffer = backing_buffer,
-                .mutex = std.Thread.Mutex{},
+                .mutex = .init,
+                .io = io,
             };
         }
 
@@ -85,8 +89,8 @@ pub fn MemoryPool(comptime T: type) type {
 
         /// return the number assigned ptrs in the memory pool.
         pub fn count(self: *Self) usize {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
 
             return self.countUnsafe();
         }
@@ -98,8 +102,8 @@ pub fn MemoryPool(comptime T: type) type {
 
         /// return the number of free ptrs remaining in the memory pool.
         pub fn available(self: *Self) usize {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
 
             return self.availableUnsafe();
         }
@@ -114,8 +118,8 @@ pub fn MemoryPool(comptime T: type) type {
         /// This function attempts to allocate a memory block from the pool by either
         /// reusing an existing block from the free list or failing if no memory is available.
         pub fn create(self: *Self) !*T {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
 
             return self.unsafeCreate();
         }
@@ -137,8 +141,8 @@ pub fn MemoryPool(comptime T: type) type {
         /// reuse existing blocks from the free list or fail if the required number of blocks
         /// are not available.
         pub fn createN(self: *Self, allocator: std.mem.Allocator, n: usize) ![]*T {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
 
             return self.unsafeCreateN(allocator, n);
         }
@@ -166,8 +170,8 @@ pub fn MemoryPool(comptime T: type) type {
         /// removes it from the `assigned_map` to mark it as no longer in use, and then enqueues
         /// it back into the `free_list` for reuse.
         pub fn destroy(self: *Self, ptr: *T) void {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
 
             return self.unsafeDestroy(ptr);
         }
@@ -187,8 +191,9 @@ pub fn MemoryPool(comptime T: type) type {
 
 test "init/deinit" {
     const allocator = testing.allocator;
+    const io = testing.io;
 
-    var memory_pool = try MemoryPool(usize).init(allocator, 100);
+    var memory_pool = try MemoryPool(usize).init(allocator, io, 100);
     defer memory_pool.deinit();
 }
 
@@ -198,8 +203,9 @@ test "create and destroy" {
     };
 
     const allocator = testing.allocator;
+    const io = testing.io;
 
-    var memory_pool_create = try MemoryPool(TestStruct).init(allocator, 100);
+    var memory_pool_create = try MemoryPool(TestStruct).init(allocator, io, 100);
     defer memory_pool_create.deinit();
 
     // create an ArrayList that will hold some pointers to be destroyed later
@@ -237,8 +243,9 @@ test "create n ptrs" {
     };
 
     const allocator = testing.allocator;
+    const io = testing.io;
 
-    var memory_pool = try MemoryPool(TestStruct).init(allocator, 100);
+    var memory_pool = try MemoryPool(TestStruct).init(allocator, io, 100);
     defer memory_pool.deinit();
 
     // create an ArrayList that will hold some pointers to be destroyed later
@@ -286,9 +293,10 @@ test "data types" {
     };
 
     const allocator = testing.allocator;
+    const io = testing.io;
 
     inline for (0..types.len) |i| {
-        var memory_pool = try MemoryPool(types[i]).init(allocator, 100);
+        var memory_pool = try MemoryPool(types[i]).init(allocator, io, 100);
         defer memory_pool.deinit();
 
         // create an ArrayList that will hold some pointers to be destroyed later

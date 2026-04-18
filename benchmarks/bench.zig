@@ -1,8 +1,10 @@
 const std = @import("std");
+const testing = std.testing;
 const zbench = @import("zbench");
 
 test "prints system info" {
-    var stderr = std.fs.File.stderr().writerStreaming(&.{});
+    const io = testing.io;
+    var stderr = std.Io.File.stderr().writerStreaming(io, &.{});
     const writer = &stderr.interface;
 
     try writer.writeAll("--------------------------------------------------------\n");

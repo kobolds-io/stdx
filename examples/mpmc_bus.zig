@@ -28,6 +28,7 @@ const CONSUMER_COUNT = 100;
 const PRODUCER_COUNT = 10;
 
 pub fn doProduce(
+    io: std.Io,
     producers: *std.array_list.Managed(*Producer(VALUE_TYPE)),
     iterations: usize,
     value: VALUE_TYPE,
@@ -42,7 +43,7 @@ pub fn doProduce(
             // try to produce an item
             producer.produce(value) catch {
                 // this producer is too fast
-                std.Thread.sleep(1 * std.time.ns_per_ms);
+                std.Io.sleep(io, .fromMilliseconds(1), .awake) catch unreachable;
 
                 continue;
             };
@@ -57,14 +58,15 @@ pub fn Bus(comptime T: type) type {
         const Self = @This();
 
         allocator: std.mem.Allocator,
-        mutex: std.Thread.Mutex,
+        io: std.Io,
+        mutex: std.Io.Mutex,
         queue: *RingBuffer(T),
         consumers: *std.array_list.Managed(*Consumer(T)),
         producers: *std.array_list.Managed(*Producer(T)),
         close_channel: UnbufferedChannel(bool),
         last_producer_index: usize,
 
-        pub fn init(allocator: std.mem.Allocator) !Self {
+        pub fn init(allocator: std.mem.Allocator, io: std.Io) !Self {
             const queue = try allocator.create(RingBuffer(T));
             errdefer allocator.destroy(queue);
 
@@ -85,12 +87,13 @@ pub fn Bus(comptime T: type) type {
 
             return Self{
                 .allocator = allocator,
-                .mutex = std.Thread.Mutex{},
+                .mutex = .init,
                 .queue = queue,
                 .consumers = consumers,
                 .producers = producers,
-                .close_channel = UnbufferedChannel(bool).new(),
+                .close_channel = UnbufferedChannel(bool).new(io),
                 .last_producer_index = 0,
+                .io = io,
             };
         }
 
@@ -106,8 +109,8 @@ pub fn Bus(comptime T: type) type {
 
         pub fn tick(self: *Self) !void {
             if (self.producers.items.len > 0) {
-                self.mutex.lock();
-                defer self.mutex.unlock();
+                self.mutex.lockUncancelable(self.io);
+                defer self.mutex.unlock(self.io);
 
                 var processed: usize = 0;
                 const producer_count = self.producers.items.len;
@@ -124,8 +127,8 @@ pub fn Bus(comptime T: type) type {
                         break;
                     }
 
-                    producer.mutex.lock();
-                    defer producer.mutex.unlock();
+                    producer.mutex.lockUncancelable(self.io);
+                    defer producer.mutex.unlock(self.io);
 
                     _ = self.queue.concatenateAvailable(producer.queue);
                 }
@@ -137,8 +140,8 @@ pub fn Bus(comptime T: type) type {
             }
 
             if (self.consumers.items.len > 0) {
-                self.mutex.lock();
-                defer self.mutex.unlock();
+                self.mutex.lockUncancelable(self.io);
+                defer self.mutex.unlock(self.io);
 
                 var max_available = self.queue.count;
                 for (self.consumers.items) |consumer| {
@@ -159,16 +162,16 @@ pub fn Bus(comptime T: type) type {
             const consumer_queues = try self.allocator.alloc(*RingBuffer(T), self.consumers.items.len);
             defer self.allocator.free(consumer_queues);
 
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
 
             for (self.consumers.items, 0..self.consumers.items.len) |consumer, i| {
-                consumer.mutex.lock();
+                consumer.mutex.lockUncancelable(self.io);
                 consumer_queues[i] = consumer.queue;
             }
             defer {
                 for (self.consumers.items) |consumer| {
-                    consumer.mutex.unlock();
+                    consumer.mutex.unlock(self.io);
                 }
             }
 
@@ -185,7 +188,7 @@ pub fn Bus(comptime T: type) type {
                 }
 
                 self.tick() catch unreachable;
-                std.Thread.sleep(1 * std.time.ns_per_us);
+                std.Io.sleep(self.io, .fromMilliseconds(1), .awake) catch unreachable;
             }
         }
 
@@ -202,12 +205,13 @@ pub fn Consumer(comptime T: type) type {
         allocator: std.mem.Allocator,
         close_channel: UnbufferedChannel(bool),
         id: usize,
-        mutex: std.Thread.Mutex,
+        mutex: std.Io.Mutex,
         consumed_count: u128,
         queue: *RingBuffer(T),
         bus: *Bus(T),
+        io: std.Io,
 
-        pub fn init(allocator: std.mem.Allocator, id: usize, bus: *Bus(T)) !Self {
+        pub fn init(allocator: std.mem.Allocator, io: std.Io, id: usize, bus: *Bus(T)) !Self {
             const queue = try allocator.create(RingBuffer(T));
             errdefer allocator.destroy(queue);
 
@@ -216,12 +220,13 @@ pub fn Consumer(comptime T: type) type {
 
             return Self{
                 .allocator = allocator,
-                .close_channel = UnbufferedChannel(bool).new(),
+                .close_channel = UnbufferedChannel(bool).new(io),
                 .id = id,
-                .mutex = .{},
+                .mutex = .init,
                 .consumed_count = 0,
                 .queue = queue,
                 .bus = bus,
+                .io = io,
             };
         }
 
@@ -234,8 +239,8 @@ pub fn Consumer(comptime T: type) type {
         pub fn tick(self: *Self) !void {
             if (self.queue.count == 0) return;
 
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
 
             // FIX: this is just some BS where the consumer is dropping the items and not
             // actually doing any work. This is an example so don't look to deeply into it.
@@ -253,7 +258,7 @@ pub fn Consumer(comptime T: type) type {
                 }
 
                 self.tick() catch unreachable;
-                std.Thread.sleep(1 * std.time.ns_per_us);
+                std.Io.sleep(self.io, .fromMilliseconds(1), .awake) catch unreachable;
             }
         }
 
@@ -270,11 +275,12 @@ pub fn Producer(comptime T: type) type {
         allocator: std.mem.Allocator,
         close_channel: UnbufferedChannel(bool),
         id: usize,
-        mutex: std.Thread.Mutex,
+        mutex: std.Io.Mutex,
         produced_count: u128,
         queue: *RingBuffer(T),
+        io: std.Io,
 
-        pub fn init(allocator: std.mem.Allocator, id: usize) !Self {
+        pub fn init(allocator: std.mem.Allocator, io: std.Io, id: usize) !Self {
             const queue = try allocator.create(RingBuffer(T));
             errdefer allocator.destroy(queue);
 
@@ -283,11 +289,12 @@ pub fn Producer(comptime T: type) type {
 
             return Self{
                 .allocator = allocator,
-                .close_channel = UnbufferedChannel(bool).new(),
+                .close_channel = UnbufferedChannel(bool).new(io),
                 .id = id,
-                .mutex = .{},
+                .mutex = .init,
                 .produced_count = 0,
                 .queue = queue,
+                .io = io,
             };
         }
 
@@ -297,8 +304,8 @@ pub fn Producer(comptime T: type) type {
         }
 
         pub fn produce(self: *Self, value: T) !void {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
 
             try self.queue.enqueue(self.allocator, value);
 
@@ -307,12 +314,13 @@ pub fn Producer(comptime T: type) type {
     };
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var bus = try Bus(VALUE_TYPE).init(allocator);
+    var bus = try Bus(VALUE_TYPE).init(allocator, io);
     defer bus.deinit();
 
     var consumers = std.array_list.Managed(*Consumer(VALUE_TYPE)).init(allocator);
@@ -321,7 +329,7 @@ pub fn main() !void {
     var producers = std.array_list.Managed(*Producer(VALUE_TYPE)).init(allocator);
     defer producers.deinit();
 
-    var bus_ready_channel = UnbufferedChannel(bool).new();
+    var bus_ready_channel = UnbufferedChannel(bool).new(io);
 
     const th = try std.Thread.spawn(
         .{},
@@ -333,19 +341,19 @@ pub fn main() !void {
     _ = bus_ready_channel.receive();
     defer bus.close();
 
-    std.Thread.sleep(500 * std.time.ns_per_ms);
+    try std.Io.sleep(io, .fromMilliseconds(500), .awake);
 
     // spawn all the consumers
     for (0..CONSUMER_COUNT) |i| {
         const consumer = try allocator.create(Consumer(VALUE_TYPE));
         errdefer allocator.destroy(consumer);
 
-        consumer.* = try Consumer(VALUE_TYPE).init(allocator, i, &bus);
+        consumer.* = try Consumer(VALUE_TYPE).init(allocator, io, i, &bus);
         errdefer consumer.deinit();
 
         try consumers.append(consumer);
 
-        var ready_channel = UnbufferedChannel(bool).new();
+        var ready_channel = UnbufferedChannel(bool).new(io);
 
         const consumer_thread = try std.Thread.spawn(
             .{},
@@ -357,8 +365,8 @@ pub fn main() !void {
         _ = ready_channel.receive();
         errdefer consumer.close();
 
-        bus.mutex.lock();
-        defer bus.mutex.unlock();
+        bus.mutex.lockUncancelable(io);
+        defer bus.mutex.unlock(io);
 
         try bus.consumers.append(consumer);
     }
@@ -368,13 +376,13 @@ pub fn main() !void {
         const producer = try allocator.create(Producer(VALUE_TYPE));
         errdefer allocator.destroy(producer);
 
-        producer.* = try Producer(VALUE_TYPE).init(allocator, i);
+        producer.* = try Producer(VALUE_TYPE).init(allocator, io, i);
         errdefer producer.deinit();
 
         try producers.append(producer);
 
-        bus.mutex.lock();
-        defer bus.mutex.unlock();
+        bus.mutex.lockUncancelable(io);
+        defer bus.mutex.unlock(io);
 
         try bus.producers.append(producer);
     }
@@ -383,19 +391,24 @@ pub fn main() !void {
     assert(bus.producers.items.len == PRODUCER_COUNT);
     assert(bus.consumers.items.len == CONSUMER_COUNT);
 
-    var do_produce_ready_chan = UnbufferedChannel(bool).new();
-    const do_produce_thread = try std.Thread.spawn(.{}, doProduce, .{ &producers, ITERATIONS, &sardine, &do_produce_ready_chan });
+    var do_produce_ready_chan = UnbufferedChannel(bool).new(io);
+    const do_produce_thread = try std.Thread.spawn(.{}, doProduce, .{
+        io,
+        &producers,
+        ITERATIONS,
+        &sardine,
+        &do_produce_ready_chan,
+    });
     do_produce_thread.detach();
 
     _ = do_produce_ready_chan.receive();
 
     // everything is setup now
-    var timer = try std.time.Timer.start();
-    const start = timer.read();
+    const start = std.Io.Timestamp.now(io, .awake);
 
     var total_items_produced: u128 = 0;
     while (total_items_produced != ITERATIONS * PRODUCER_COUNT) {
-        std.Thread.sleep(1 * std.time.ns_per_ms);
+        std.Io.sleep(io, .fromMilliseconds(1), .awake) catch unreachable;
         total_items_produced = 0;
         for (producers.items) |producer| {
             total_items_produced += producer.produced_count;
@@ -404,15 +417,16 @@ pub fn main() !void {
 
     var total_items_consumed: u128 = 0;
     while (total_items_consumed != ITERATIONS * PRODUCER_COUNT * CONSUMER_COUNT) {
-        std.Thread.sleep(1 * std.time.ns_per_ms);
+        std.Io.sleep(io, .fromMilliseconds(1), .awake) catch unreachable;
         total_items_consumed = 0;
         for (consumers.items) |consumer| {
             total_items_consumed += consumer.consumed_count;
         }
     }
 
-    log.err("took {}ms, total iters {}, total_items_produced {}, total_items_consumed {}", .{
-        (timer.read() - start) / std.time.ns_per_ms,
+    const end = std.Io.Timestamp.now(io, .awake);
+    log.err("took {d}ms, total iters {}, total_items_produced {}, total_items_consumed {}", .{
+        @divTrunc(end.nanoseconds - start.nanoseconds, std.time.ns_per_ms),
         ITERATIONS,
         total_items_produced,
         total_items_consumed,
@@ -433,8 +447,8 @@ pub fn main() !void {
     // Clean up all of the consumers
     for (consumers.items) |consumer| {
         // remove this consumer from the bus
-        bus.mutex.lock();
-        defer bus.mutex.unlock();
+        bus.mutex.lockUncancelable(io);
+        defer bus.mutex.unlock(io);
 
         for (bus.consumers.items, 0..bus.consumers.items.len) |bus_consumer, i| {
             if (consumer == bus_consumer) {

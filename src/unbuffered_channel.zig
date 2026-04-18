@@ -10,72 +10,80 @@ pub fn UnbufferedChannel(comptime T: type) type {
     return struct {
         const Self = @This();
 
-        condition: std.Thread.Condition = .{},
-        mutex: std.Thread.Mutex = .{},
-        value: T = undefined,
-        has_value: bool = false,
+        not_full: std.Io.Condition = .init,
+        not_empty: std.Io.Condition = .init,
+        mutex: std.Io.Mutex = .init,
+        value: ?T = null,
+        io: std.Io,
 
-        pub fn new() Self {
-            return .{};
+        const poll_interval_ns: u64 = 100_000; // 100us
+
+        pub fn new(io: std.Io) Self {
+            return .{ .io = io };
         }
 
         /// Send a value to the receiver.
-        /// `send` will block until the `receive` is called and consumes the value.
+        /// `send` will block until `receive` is called and consumes the value.
         pub fn send(self: *Self, value: T) void {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
 
-            while (self.has_value) {
-                self.condition.wait(&self.mutex);
+            // wait until the previous value has been consumed
+            while (self.value != null) {
+                self.not_full.waitUncancelable(self.io, &self.mutex);
             }
 
             self.value = value;
-            self.has_value = true;
-            self.condition.signal();
+            self.not_empty.signal(self.io);
         }
 
         /// Receive a value from the sender.
         pub fn receive(self: *Self) T {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
 
-            while (!self.has_value) {
-                self.condition.wait(&self.mutex);
+            while (self.value == null) {
+                self.not_empty.waitUncancelable(self.io, &self.mutex);
             }
 
-            const result = self.value;
-            self.has_value = false;
-            self.condition.signal(); // notify sender
+            const result = self.value.?;
+            self.value = null;
+            self.not_full.signal(self.io); // notify sender that slot is free
             return result;
         }
 
         pub fn tryReceive(self: *Self, timeout_ns: u64) !T {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            var now_ts = std.Io.Clock.now(.awake, self.io);
+            const deadline = now_ts.nanoseconds + timeout_ns;
 
-            const start = std.time.nanoTimestamp();
-            const deadline = start + timeout_ns;
+            while (true) {
+                self.mutex.lockUncancelable(self.io);
 
-            while (!self.has_value) {
-                const now = std.time.nanoTimestamp();
-                if (now >= deadline) {
-                    self.condition.signal(); // signal sender in case it’s waiting
-                    return error.TimedOut;
+                if (self.value != null) {
+                    const result = self.value.?;
+                    self.value = null;
+                    self.not_full.signal(self.io);
+                    self.mutex.unlock(self.io);
+                    return result;
                 }
 
-                const remaining: u64 = @intCast(deadline - now);
-                try self.condition.timedWait(&self.mutex, remaining);
-            }
+                self.mutex.unlock(self.io);
 
-            const result = self.value;
-            self.has_value = false;
-            self.condition.signal(); // notify sender
-            return result;
+                now_ts = std.Io.Clock.now(.awake, self.io);
+                if (now_ts.nanoseconds >= deadline) return error.Timeout;
+
+                const remaining = deadline - now_ts.nanoseconds;
+                self.io.sleep(.fromNanoseconds(@min(poll_interval_ns, remaining)), .awake) catch {
+                    return error.Timeout;
+                };
+            }
         }
     };
 }
 
 test "good behavior" {
+    const io = testing.io;
+
     const testerFn = struct {
         fn run(channel: *UnbufferedChannel(u32), value: u32) void {
             channel.send(value);
@@ -84,30 +92,33 @@ test "good behavior" {
 
     const want: u32 = 123;
 
-    var channel = UnbufferedChannel(u32).new();
+    var channel = UnbufferedChannel(u32).new(io);
     const th = try std.Thread.spawn(.{}, testerFn, .{ &channel, want });
     defer th.join();
 
-    const got = try channel.tryReceive(1 * std.time.ns_per_ms);
-
+    const got = try channel.tryReceive(1 * std.time.ns_per_s);
     try testing.expectEqual(want, got);
 }
 
 test "bad behavior" {
+    const io = testing.io;
+
     const testerFn = struct {
-        fn run(channel: *UnbufferedChannel(u32), value: u32) void {
-            std.Thread.sleep(500 * std.time.ns_per_ms); // wait too long
+        fn run(channel: *UnbufferedChannel(u32), send_io: std.Io, value: u32) void {
+            send_io.sleep(.fromMilliseconds(500), .awake) catch unreachable;
             channel.send(value);
         }
     }.run;
 
-    var channel = UnbufferedChannel(u32).new();
-    _ = try std.Thread.spawn(.{}, testerFn, .{ &channel, 9999 });
+    var channel = UnbufferedChannel(u32).new(io);
+    _ = try std.Thread.spawn(.{}, testerFn, .{ &channel, io, 9999 });
 
     try testing.expectError(error.Timeout, channel.tryReceive(1 * std.time.ns_per_us));
 }
 
 test "receive multiple values" {
+    const io = testing.io;
+
     const testerFn = struct {
         fn run(channel: *UnbufferedChannel(u32)) void {
             channel.send(1);
@@ -116,16 +127,11 @@ test "receive multiple values" {
         }
     }.run;
 
-    var channel = UnbufferedChannel(u32).new();
+    var channel = UnbufferedChannel(u32).new(io);
     const th = try std.Thread.spawn(.{}, testerFn, .{&channel});
     defer th.join();
 
-    const v1 = channel.receive();
-    try testing.expectEqual(1, v1);
-
-    const v2 = channel.receive();
-    try testing.expectEqual(2, v2);
-
-    const v3 = channel.receive();
-    try testing.expectEqual(3, v3);
+    try testing.expectEqual(1, channel.receive());
+    try testing.expectEqual(2, channel.receive());
+    try testing.expectEqual(3, channel.receive());
 }

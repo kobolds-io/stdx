@@ -21,7 +21,7 @@ const BenchmarkBufferedChannelSend = struct {
         };
     }
 
-    pub fn run(self: Self, _: std.mem.Allocator) void {
+    pub fn run(self: *Self, _: std.mem.Allocator) void {
         // std.debug.print("self: {any}\n", .{self});
         for (self.list.items) |data| {
             self.channel.send(data);
@@ -42,7 +42,7 @@ const BenchmarkBufferedChannelReceive = struct {
         };
     }
 
-    pub fn run(self: Self, _: std.mem.Allocator) void {
+    pub fn run(self: *Self, _: std.mem.Allocator) void {
         for (self.list.items) |_| {
             _ = self.channel.receive();
         }
@@ -62,9 +62,10 @@ fn beforeEachReceive() void {
 }
 
 test "BufferedChannel benchmarks" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
+    const io = testing.io;
 
     var bench = zbench.Benchmark.init(
         allocator,
@@ -84,10 +85,10 @@ test "BufferedChannel benchmarks" {
         data_list.appendAssumeCapacity(i);
     }
 
-    send_channel = try BufferedChannel(usize).init(allocator, data_list.capacity);
+    send_channel = try BufferedChannel(usize).init(allocator, io, data_list.capacity);
     defer send_channel.deinit(allocator);
 
-    receive_channel = try BufferedChannel(usize).init(allocator, data_list.capacity);
+    receive_channel = try BufferedChannel(usize).init(allocator, io, data_list.capacity);
     defer receive_channel.deinit(allocator);
 
     const channel_send_title = try std.fmt.allocPrint(
@@ -114,22 +115,23 @@ test "BufferedChannel benchmarks" {
         },
     );
 
-    // try bench.addParam(
-    //     channel_receive_title,
-    //     &BenchmarkBufferedChannelReceive.new(&data_list, &receive_channel),
-    //     .{
-    //         .hooks = .{
-    //             .before_each = beforeEachReceive,
-    //         },
-    //     },
-    // );
+    try bench.addParam(
+        channel_receive_title,
+        &BenchmarkBufferedChannelReceive.new(&data_list, &receive_channel),
+        .{
+            .hooks = .{
+                .before_each = beforeEachReceive,
+            },
+        },
+    );
 
-    var stderr = std.fs.File.stderr().writerStreaming(&.{});
-    const writer = &stderr.interface;
+    const stderr = std.Io.File.stderr();
+    var stderr_writer = stderr.writerStreaming(io, &.{});
+    const writer = &stderr_writer.interface;
 
     try writer.writeAll("\n");
     try writer.writeAll("|----------------------------|\n");
     try writer.writeAll("| BufferedChannel Benchmarks |\n");
     try writer.writeAll("|----------------------------|\n");
-    try bench.run(writer);
+    try bench.run(io, stderr);
 }

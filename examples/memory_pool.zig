@@ -4,13 +4,14 @@ const assert = std.debug.assert;
 const stdx = @import("stdx");
 const MemoryPool = stdx.MemoryPool;
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
     // initialize a memory pool of i32s with a capacity of 100 items
-    var memory_pool = try MemoryPool(i32).init(allocator, 100);
+    var memory_pool = try MemoryPool(i32).init(allocator, io, 100);
     defer memory_pool.deinit();
 
     // create a new ptr

@@ -5,8 +5,9 @@ const stdx = @import("stdx");
 const UnbufferedChannel = stdx.UnbufferedChannel;
 const log = std.log.scoped(.UnbufferedChannelExample);
 
-pub fn main() !void {
-    var channel = UnbufferedChannel(usize).new();
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    var channel = UnbufferedChannel(usize).new(io);
 
     log.info("sending an item", .{});
     channel.send(1);

@@ -39,11 +39,12 @@ Using `stdx` is just as simple as using any other `zig` dependency.
 // import the library into your file
 const stdx = @import("stdx");
 
-fn main() !void {
+fn main(init: std.process.Init) !void {
+    const io = init.io;
     // your code
     // ....
 
-    const memory_pool = try stdx.MemoryPool(i32).init(allocator, 200);
+    const memory_pool = try stdx.MemoryPool(i32).init(allocator, io, 200);
     defer memory_pool.deinit();
 
     // your code
@@ -89,13 +90,15 @@ exe.root_module.addImport("stdx", stdx_mod);
 
 ## Organization
 
-This library follows the organization of the `zig` `std` library. You will see familiar hierarchies like `stdx.mem` for memory stuff and `std.<DATA_STRUCTURE>` for other data structures. As I build this library out, I'll add more notes and documentation.
+This library organized as `stdx.<DataStructure/Algorithm>`. Very simple.
 
 ## Examples
 
 There are examples included in this library that go over a brief overview of how each feature can be used. You can build and run examples by performing the following steps. Examples are in the [examples](./examples/) directory. Examples are always welcome.
 
 ```bash
+
+# add optimization flags if you want ;)
 zig build examples
 
 ./zig-out/bin/<example_name>
@@ -124,61 +127,61 @@ Example output
   Operating System: linux x86_64
   CPU:              13th Gen Intel(R) Core(TM) i9-13900K
   CPU Cores:        24
-  Total Memory:     23.299GiB
+  Total Memory:     14.412GiB
 --------------------------------------------------------
 
 |----------------------------|
 | BufferedChannel Benchmarks |
 |----------------------------|
-benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995
------------------------------------------------------------------------------------------------------------------------------
-send 10000 items       65535    6.652s         101.51us ± 16.49us    (93.918us ... 2.684ms)       99.665us   129.869us  142.732us
-receive 10000 items    65535    5.112s         78.012us ± 10.941us   (76.327us ... 1.593ms)       76.486us   102.904us  115.491us
+benchmark          runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
+-------------------------------------------------------------------------------------------------------------------------------
+send 10000 items   65535    6.458s         98.546us ± 12.445us   (93.112us ... 1.438ms)       97.844us   132.5us    144.742us  
+receive 10000 ite  65535    5.439s         83.008us ± 45.284us   (78.147us ... 7.636ms)       82.294us   133.062us  163.666us  
 
 |-------------------------|
 | EventEmitter Benchmarks |
 |-------------------------|
-benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995
------------------------------------------------------------------------------------------------------------------------------
-emit 1 listeners 10000 65535    2.108s         32.175us ± 4.119us    (31.125us ... 257.44us)      31.434us   44.197us   53us
-emit 10 listeners 1000 65535    7.354s         112.226us ± 15.817us  (105.4us ... 1.803ms)        110.99us   155.984us  177.795us
-emit 100 listeners 100 65535    1m4.794s       988.707us ± 47.668us  (959.537us ... 2.9ms)        995.677us  1.129ms    1.192ms
+benchmark                        runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
+---------------------------------------------------------------------------------------------------------------------------------------------
+emit 1 listeners 10000 items     1        34.795us       34.795us ± 0ns        (34.795us ... 34.795us)      34.795us   34.795us   34.795us   
+emit 10 listeners 10000 items    1        109.427us      109.427us ± 0ns       (109.427us ... 109.427us)    109.427us  109.427us  109.427us  
+emit 100 listeners 10000 items   1        991.267us      991.267us ± 0ns       (991.267us ... 991.267us)    991.267us  991.267us  991.267us  
 
 |-----------------------|
 | MemoryPool Benchmarks |
 |-----------------------|
-benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995
------------------------------------------------------------------------------------------------------------------------------
-create 10000 items     65535    11.931s        182.062us ± 16.844us  (172.281us ... 1.015ms)      183.255us  239.032us  267.836us
-unsafeCreate 10000 ite 65535    9.944s         151.747us ± 46.353us  (143.466us ... 9.661ms)      150.883us  205.453us  232.292us
+benchmark                  runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
+---------------------------------------------------------------------------------------------------------------------------------------
+create 10000 items         65535    12.175s        185.784us ± 60.638us  (173.106us ... 14.178ms)     186.858us  239.059us  263.416us  
+unsafeCreate 10000 items   65535    10.013s        152.803us ± 58.121us  (144.741us ... 13.891ms)     152.56us   196.424us  216.088us  
 
 |-----------------------|
 | RingBuffer Benchmarks |
 |-----------------------|
-benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995
------------------------------------------------------------------------------------------------------------------------------
-prepend 10000 items    65535    2.163s         33.019us ± 16.474us   (31.864us ... 4.042ms)       32.177us   47.545us   61.212us
-enqueue 10000 items    65535    2.014s         30.735us ± 8.628us    (29.787us ... 1.702ms)       30.022us   44.017us   56.32us
-enqueueMany 10000 item 65535    2.055s         31.359us ± 8.313us    (29.842us ... 1.718ms)       30.663us   43.289us   54.346us
-dequeue 10000 items    65535    2.07s          31.589us ± 6.167us    (30.901us ... 693.698us)     30.915us   43.223us   53.881us
-dequeueMany 10000 item 65535    2.067s         31.547us ± 6.078us    (30.234us ... 942.003us)     30.842us   43.305us   52.64us
-concatenate 10000 item 65535    2.127s         32.466us ± 7.377us    (30.978us ... 660.708us)     31.698us   47.277us   60.76us
-copy 10000 items       65535    2.112s         32.235us ± 6.671us    (30.242us ... 600.542us)     31.537us   51.058us   63.568us
-sort 10000 items       65535    28.923s        441.345us ± 118.3us   (417.625us ... 21.623ms)     444.024us  558.995us  601.388us
+benchmark                 runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
+--------------------------------------------------------------------------------------------------------------------------------------
+prepend 10000 items       65535    2.199s         33.559us ± 9.921us    (31.828us ... 859.609us)     32.669us   58.883us   81.022us   
+enqueue 10000 items       65535    2.067s         31.552us ± 43.04us    (29.761us ... 10.219ms)      30.621us   55.161us   72.415us   
+enqueueMany 10000 items   65535    2.07s          31.596us ± 8.914us    (28.938us ... 970.921us)     31.236us   47.932us   59.374us   
+dequeue 10000 items       65535    2.126s         32.45us ± 11.355us    (30.902us ... 783.759us)     31.542us   56.903us   83.488us   
+dequeueMany 10000 items   65535    2s             30.519us ± 9.973us    (29.121us ... 1.345ms)       29.845us   53.819us   69.766us   
+concatenate 10000 items   65535    2.187s         33.386us ± 33.989us   (31.201us ... 8.407ms)       32.739us   57.035us   72.596us   
+copy 10000 items          65535    2.159s         32.948us ± 8.64us     (30.486us ... 516.128us)     32.541us   57.097us   72.168us   
+sort 10000 items          65535    31.428s        479.575us ± 129.938us (435.62us ... 17.483ms)      473.571us  812.069us  1.049ms    
 
 |-------------------|
 | Signal Benchmarks |
 |-------------------|
-benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995
------------------------------------------------------------------------------------------------------------------------------
-send/receive 10000 ite 65535    10.286s        156.967us ± 41.073us  (152.652us ... 7.118ms)      155.585us  200.04us   223.427us
+benchmark                  runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
+---------------------------------------------------------------------------------------------------------------------------------------
+send/receive 10000 items   65535    13.55s         206.762us ± 57.545us  (184.572us ... 9.724ms)      204.871us  325.636us  386.952us  
 
--------------------------------|
+|------------------------------|
 | UnbufferedChannel Benchmarks |
 |------------------------------|
-benchmark              runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995
------------------------------------------------------------------------------------------------------------------------------
-send/receive 10000 ite 65535    18.64s         284.442us ± 89.213us  (274.464us ... 16.443ms)     286.887us  355.093us  391.339us
+benchmark                  runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
+---------------------------------------------------------------------------------------------------------------------------------------
+send/receive 10000 items   65535    21.432s        327.042us ± 52.381us  (309.834us ... 5.604ms)      325.329us  477.18us   524.423us  
 ```
 
 ## Contributing

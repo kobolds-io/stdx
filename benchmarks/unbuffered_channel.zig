@@ -21,7 +21,7 @@ const BenchmarkUnbufferedChannelSendReceive = struct {
         };
     }
 
-    pub fn run(self: Self, _: std.mem.Allocator) void {
+    pub fn run(self: *Self, _: std.mem.Allocator) void {
         for (self.list.items) |data| {
             self.channel.send(data);
             const v = self.channel.tryReceive(1 * std.time.ns_per_ms) catch unreachable;
@@ -30,24 +30,24 @@ const BenchmarkUnbufferedChannelSendReceive = struct {
     }
 };
 
-var simple_channel: UnbufferedChannel(usize) = undefined;
-
-var data_list: std.array_list.Managed(usize) = undefined;
-const allocator = testing.allocator;
-
 test "UnbufferedChannel benchmarks" {
+    const allocator = testing.allocator;
+
+    const io = testing.io;
     var bench = zbench.Benchmark.init(
-        std.testing.allocator,
+        allocator,
         .{ .iterations = constants.benchmark_max_iterations },
     );
     defer bench.deinit();
 
-    // Create a list of `n` length that will be used/reused by each benchmarking test
-    data_list = try std.array_list.Managed(usize).initCapacity(
+    var simple_channel = UnbufferedChannel(usize).new(io);
+    var data_list = try std.array_list.Managed(usize).initCapacity(
         allocator,
         constants.benchmark_max_queue_data_list,
     );
     defer data_list.deinit();
+
+    // Create a list of `n` length that will be used/reused by each benchmarking test
 
     // fill the data list with items
     for (0..data_list.capacity) |i| {
@@ -68,12 +68,13 @@ test "UnbufferedChannel benchmarks" {
         .{},
     );
 
-    var stderr = std.fs.File.stderr().writerStreaming(&.{});
-    const writer = &stderr.interface;
+    const stderr = std.Io.File.stderr();
+    var stderr_writer = stderr.writerStreaming(io, &.{});
+    const writer = &stderr_writer.interface;
 
     try writer.writeAll("\n");
-    try writer.writeAll("-------------------------------|\n");
+    try writer.writeAll("|------------------------------|\n");
     try writer.writeAll("| UnbufferedChannel Benchmarks |\n");
     try writer.writeAll("|------------------------------|\n");
-    try bench.run(writer);
+    try bench.run(io, stderr);
 }

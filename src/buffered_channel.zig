@@ -7,18 +7,22 @@ const assert = std.debug.assert;
 const CancellationToken = @import("./cancellation_token.zig").CancellationToken;
 const RingBuffer = @import("./ring_buffer.zig").RingBuffer;
 
+const poll_interval_ns: u64 = 100_000; // 100us polling interval for timed waits
+
 pub fn BufferedChannel(comptime T: type) type {
     return struct {
         const Self = @This();
 
         buffer: RingBuffer(T),
-        mutex: std.Thread.Mutex = .{},
-        not_empty: std.Thread.Condition = .{},
-        not_full: std.Thread.Condition = .{},
+        mutex: std.Io.Mutex = .init,
+        not_empty: std.Io.Condition = .init,
+        not_full: std.Io.Condition = .init,
+        io: std.Io,
 
-        pub fn init(allocator: std.mem.Allocator, buffer_capacity: usize) !Self {
+        pub fn init(allocator: std.mem.Allocator, io: std.Io, buffer_capacity: usize) !Self {
             return Self{
                 .buffer = try RingBuffer(T).initCapacity(allocator, buffer_capacity),
+                .io = io,
             };
         }
 
@@ -27,79 +31,90 @@ pub fn BufferedChannel(comptime T: type) type {
         }
 
         pub fn send(self: *Self, value: T) void {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
 
             while (self.buffer.isFull()) {
-                self.not_full.wait(&self.mutex);
+                self.not_full.waitUncancelable(self.io, &self.mutex);
             }
 
             self.buffer.enqueueAssumeCapacity(value);
-            self.not_empty.signal();
+            self.not_empty.signal(self.io);
         }
 
         pub fn receive(self: *Self) T {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
 
             while (self.buffer.isEmpty()) {
-                self.not_empty.wait(&self.mutex);
+                self.not_empty.waitUncancelable(self.io, &self.mutex);
             }
 
             const value = self.buffer.dequeue().?;
-
-            self.not_full.signal();
+            self.not_full.signal(self.io);
             return value;
         }
 
         pub fn trySend(self: *Self, value: T, timeout_ns: u64, cancel: ?*CancellationToken) !void {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            var now_ts = std.Io.Clock.now(.awake, self.io);
+            const deadline = now_ts.nanoseconds + timeout_ns;
 
-            const deadline = std.time.nanoTimestamp() + timeout_ns;
-
-            while (self.buffer.isFull()) {
+            while (true) {
+                // Check cancellation before acquiring lock
                 if (cancel) |token| {
                     if (token.isCancelled()) return error.Cancelled;
                 }
 
-                const now = std.time.nanoTimestamp();
-                if (now >= deadline) return error.Timeout;
+                self.mutex.lockUncancelable(self.io);
 
-                self.not_empty.timedWait(&self.mutex, @intCast(deadline - now)) catch {
-                    continue;
+                if (!self.buffer.isFull()) {
+                    self.buffer.enqueueAssumeCapacity(value);
+                    self.not_empty.signal(self.io);
+                    self.mutex.unlock(self.io);
+                    return;
+                }
+
+                self.mutex.unlock(self.io);
+
+                now_ts = std.Io.Clock.now(.awake, self.io);
+                if (now_ts.nanoseconds >= deadline) return error.Timeout;
+
+                const remaining = deadline - now_ts.nanoseconds;
+                self.io.sleep(.fromNanoseconds(@min(poll_interval_ns, remaining)), .awake) catch {
+                    return error.Timeout;
                 };
             }
-
-            self.buffer.enqueueAssumeCapacity(value);
-            self.not_empty.signal();
         }
 
         pub fn tryReceive(self: *Self, timeout_ns: u64, cancel: ?*CancellationToken) !T {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            var now_ts = std.Io.Clock.now(.awake, self.io);
+            const deadline = now_ts.nanoseconds + timeout_ns;
 
-            const deadline = std.time.nanoTimestamp() + timeout_ns;
-
-            while (self.buffer.isEmpty()) {
+            while (true) {
+                // Check cancellation before acquiring lock
                 if (cancel) |token| {
                     if (token.isCancelled()) return error.Cancelled;
                 }
 
-                const now = std.time.nanoTimestamp();
-                if (now >= deadline) return error.Timeout;
+                self.mutex.lockUncancelable(self.io);
 
-                self.not_empty.timedWait(&self.mutex, @intCast(deadline - now)) catch {
-                    continue;
+                if (!self.buffer.isEmpty()) {
+                    const value = self.buffer.dequeue().?;
+                    self.not_full.signal(self.io);
+                    self.mutex.unlock(self.io);
+                    return value;
+                }
+
+                self.mutex.unlock(self.io);
+
+                now_ts = std.Io.Clock.now(.awake, self.io);
+                if (now_ts.nanoseconds >= deadline) return error.Timeout;
+
+                const remaining = deadline - now_ts.nanoseconds;
+                self.io.sleep(.fromNanoseconds(@min(poll_interval_ns, remaining)), .awake) catch {
+                    return error.Timeout;
                 };
             }
-
-            if (self.buffer.dequeue()) |value| {
-                self.not_full.signal();
-                return value;
-            }
-
-            return error.SyncError;
         }
 
         pub fn count(self: Self) usize {
@@ -118,13 +133,13 @@ pub fn BufferedChannel(comptime T: type) type {
             return self.buffer.isFull();
         }
 
-        /// Unsafely Reset the channel and drop ALL items held within
+        /// Unsafely Reset the channel and drop ALL items held within.
         ///
         /// `reset` does not deallocate any memory, it only removes all the items from
         /// the channel `buffer`.
         pub fn reset(self: *Self) void {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
 
             self.buffer.reset();
         }
@@ -133,18 +148,17 @@ pub fn BufferedChannel(comptime T: type) type {
 
 test "multi items" {
     const allocator = testing.allocator;
+    const io = testing.io;
 
-    var channel = try BufferedChannel(usize).init(allocator, 10);
+    var channel = try BufferedChannel(usize).init(allocator, io, 10);
     defer channel.deinit(allocator);
 
-    // multiple items can be buffered
     for (0..channel.capacity()) |i| {
         channel.send(i);
     }
 
     try testing.expect(channel.buffer.isFull());
 
-    // values are received in the same order that they are sent
     for (0..channel.capacity()) |i| {
         const v = channel.receive();
         try testing.expectEqual(v, i);
@@ -153,60 +167,52 @@ test "multi items" {
 
 test "full behavior" {
     const allocator = testing.allocator;
+    const io = testing.io;
 
-    var channel = try BufferedChannel(usize).init(allocator, 100);
+    var channel = try BufferedChannel(usize).init(allocator, io, 100);
     defer channel.deinit(allocator);
 
-    // start a fast sender
+    const total_items = channel.capacity() * 2;
+
     const fastSend = struct {
-        pub fn fastSend(chan: *BufferedChannel(usize), value: usize) void {
-            // send 20 items, which is more than the capacity of the channel
-            // we are relying on the slow receiver to pull items out of the channel
-            // thus opening available slots for the new items
-            for (0..chan.capacity() * 2) |_| {
-                std.Thread.sleep(1 * std.time.ns_per_ms);
+        pub fn fastSend(chan: *BufferedChannel(usize), send_io: std.Io, value: usize, n: usize) void {
+            for (0..n) |_| {
+                send_io.sleep(.fromMilliseconds(1), .awake) catch unreachable;
                 chan.send(value);
             }
         }
     }.fastSend;
 
-    // start a slow thread
     const slowReceive = struct {
-        pub fn slowReceive(chan: *BufferedChannel(usize)) void {
-            var iters: usize = 0;
-            while (!chan.isEmpty()) {
-                std.Thread.sleep(10 * std.time.ns_per_ms);
+        pub fn slowReceive(chan: *BufferedChannel(usize), recv_io: std.Io, n: usize) void {
+            for (0..n) |_| {
+                recv_io.sleep(.fromMilliseconds(10), .awake) catch unreachable;
                 _ = chan.receive();
-                iters += 1;
             }
-
-            // ensure that we are pull ALL of the items out of the channel
-            testing.expectEqual(chan.capacity() * 2, iters) catch unreachable;
         }
     }.slowReceive;
 
-    const send_th = try std.Thread.spawn(.{}, fastSend, .{ &channel, 42069 });
+    const send_th = try std.Thread.spawn(.{}, fastSend, .{ &channel, io, 42069, total_items });
     defer send_th.join();
 
     // give time to the send_th to spin up
-    std.Thread.sleep(10 * std.time.ns_per_ms);
+    try io.sleep(.fromMilliseconds(10), .awake);
 
-    const receive_th = try std.Thread.spawn(.{}, slowReceive, .{&channel});
+    const receive_th = try std.Thread.spawn(.{}, slowReceive, .{ &channel, io, total_items });
     defer receive_th.join();
 }
 
 test "receive timeouts and cancellation" {
     const allocator = testing.allocator;
+    const io = testing.io;
 
-    var channel = try BufferedChannel(usize).init(allocator, 100);
+    var channel = try BufferedChannel(usize).init(allocator, io, 100);
     defer channel.deinit(allocator);
 
     const receiver = struct {
         pub fn do(running: *bool, chan: *BufferedChannel(usize), delay: u64, cancel_token: *CancellationToken) void {
             running.* = true;
-            // ensure that the token is not cancelled before starting to wait
             assert(!cancel_token.isCancelled());
-
             testing.expectError(error.Cancelled, chan.tryReceive(delay, cancel_token)) catch unreachable;
         }
     }.do;
@@ -219,8 +225,7 @@ test "receive timeouts and cancellation" {
     const cancel_th = try std.Thread.spawn(.{}, receiver, .{ &running, &channel, delay, &cancel_token });
     defer cancel_th.join();
 
-    // give time to the cancel_th to spin up
-    std.Thread.sleep(10 * std.time.ns_per_ms);
+    try io.sleep(.fromMilliseconds(10), .awake);
     try testing.expectEqual(true, running);
 
     cancel_token.cancel();
@@ -228,11 +233,11 @@ test "receive timeouts and cancellation" {
 
 test "send timeouts and cancellation" {
     const allocator = testing.allocator;
+    const io = testing.io;
 
-    var channel = try BufferedChannel(usize).init(allocator, 10);
+    var channel = try BufferedChannel(usize).init(allocator, io, 10);
     defer channel.deinit(allocator);
 
-    // fill the channel up
     for (0..channel.buffer.capacity) |i| {
         channel.send(i);
     }
@@ -240,9 +245,7 @@ test "send timeouts and cancellation" {
     const sender = struct {
         pub fn do(running: *bool, chan: *BufferedChannel(usize), delay: u64, cancel_token: *CancellationToken) void {
             running.* = true;
-            // ensure that the token is not cancelled before starting to wait
             assert(!cancel_token.isCancelled());
-
             testing.expectError(error.Cancelled, chan.trySend(42069, delay, cancel_token)) catch unreachable;
         }
     }.do;
@@ -250,14 +253,12 @@ test "send timeouts and cancellation" {
     try testing.expectError(error.Timeout, channel.trySend(42069, 1, null));
 
     var cancel_token = CancellationToken{};
-
     const delay = 100 * std.time.ns_per_ms;
     var running = false;
     const cancel_th = try std.Thread.spawn(.{}, sender, .{ &running, &channel, delay, &cancel_token });
     defer cancel_th.join();
 
-    // give time to the cancel_th to spin up
-    std.Thread.sleep(10 * std.time.ns_per_ms);
+    try io.sleep(.fromMilliseconds(10), .awake);
     try testing.expectEqual(true, running);
 
     cancel_token.cancel();
