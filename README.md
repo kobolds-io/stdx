@@ -1,10 +1,10 @@
 # Overview
 
-**CAUTION** this project is current in development and should be used at your own risk. Until there is a stable tagged release, be careful.
-
 This is a library adding several generally useful tools that are either not included in the standard library or have slightly different behavior. As the `zig` programming language matures, we should get more and more awesome `std` library features but until then...
 
 All data structures, algorithms and utilities included in this library are written from scratch. This minimizes the threat of malicious or unintentional supply chain attacks. It also ensures that all code is controlled in a single place and HOPEFULLY minimizes the chance that `zig` turns into the hellish monstrocity that is `npm` and the `nodejs` ecosystem.
+
+In general people use this library for the `RingBuffer` and the `MemoryPool` datastructures. See below for details.
 
 # Table of Contents
 
