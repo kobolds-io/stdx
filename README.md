@@ -18,18 +18,15 @@ In general people use this library for the `RingBuffer` and the `MemoryPool` dat
    7. [Code of Conduct](#code-of-conduct)
 2. [Documentation](#documentation)
    1. [stdx](#stdx)
-      1. [Multithreading](#multithreading)
-         1. [BufferedChannel](#bufferedchannel)
-         2. [UnbufferedChannel](#unbufferedchannel)
-         3. [Signal](#signal)
-      2. [Events](#events)
-         1. [EventEmitter](#eventemitter)
-      3. [Queues/Lists](#queues/lists)
-         1. [ManagedQueue](#managedqueue)
-         2. [UnmanagedQueue](#unmanagedqueue)
-         3. [RingBuffer](#ringbuffer)
-      4. [Memory Management](#memory-management)
-         1. [MemoryPool](#memorypool)
+      1. [BufferedChannel](#bufferedchannel)
+      1. [UnbufferedChannel](#unbufferedchannel)
+      1. [Signal](#signal)
+      1. [EventEmitter](#eventemitter)
+      1. [ManagedQueue](#managedqueue)
+      1. [UnmanagedQueue](#unmanagedqueue)
+      1. [RingBuffer](#ringbuffer)
+      1. [SPSCQueue](#spscqueue)
+      1. [MemoryPool](#memorypool)
 
 ## Usage
 
@@ -204,11 +201,9 @@ Please see the [Code of Conduct](./CODE_OF_CONDUCT.md) file. Simple library, sim
 
 ## stdx
 
-The `stdx` top level module. Directly contains data structures and is the parent module to modules like `io` and `net`.
+The `stdx` top level module and should be imported as `const stdx = @import("stdx");` or importing structures directly using `const RingBuffer = @import("stdx").RingBuffer;`.
 
-### Mutlithreading
-
-#### BufferedChannel
+### BufferedChannel
 
 > added v0.0.3 as `stdx.BufferedChannel`
 
@@ -216,7 +211,7 @@ The `BufferedChannel` is a structure that can be used to safely transmit data ac
 
 See [example](./examples/buffered_channel.zig) and [source](./src/buffered_channel.zig) for more information on usage.
 
-#### UnbufferedChannel
+### UnbufferedChannel
 
 > added v0.0.3 as `stdx.UnbufferedChannel`
 
@@ -224,7 +219,7 @@ The `UnbufferedChannel` is a structure that can be used to safely transmit data 
 
 See [example](./examples/unbuffered_channel.zig) and [source](./src/unbuffered_channel.zig) for more information on usage.
 
-#### Signal
+### Signal
 
 > added v0.0.8 as `stdx.Signal`
 
@@ -232,19 +227,7 @@ The `Signal` is a structure that can be used to safely transmit data across thre
 
 See [example](./examples/signal.zig) and [source](./src/signal.zig) for more information on usage.
 
-### Events
-
-#### EventEmitter
-
-> added v0.0.6 as `stdx.EventEmitter`
-
-The `EventEmitter` is a tool for managing communications across callbacks. This is a very similar implementation to the nodejs event emitter class which is one of the fundemental building blocks for asynchronous events. The `EventEmitter` provides a simple(ish) api to register `Callback`s with appropriate `Context`s to be called when a specific `Event` is called.
-
-See [example](./examples/event_emitter.zig) and [source](./src/event_emitter.zig) for more information on usage.
-
-### Queues/Lists
-
-#### ManagedQueue
+### ManagedQueue
 
 > added v0.0.2 as `stdx.ManagedQueue`
 
@@ -252,7 +235,7 @@ The `ManagedQueue` is a generic queue implementation that uses a singly linked l
 
 See [example](./examples/managed_queue.zig) and [source](./src/managed_queue.zig) for more information on usage.
 
-#### UnmanagedQueue
+### UnmanagedQueue
 
 > added v0.0.2 as `stdx.UnmanagedQueue`
 
@@ -262,7 +245,7 @@ Please also see `UnmanagedQueueNode` which is the `Node` used by the `UnmanagedQ
 
 See [example](./examples/unmanaged_queue.zig) and [source](./src/unmanaged_queue.zig) for more information on usage.
 
-#### RingBuffer
+### RingBuffer
 
 > added v0.0.1 as `stdx.RingBuffer`
 
@@ -270,12 +253,28 @@ A `RingBuffer` is a data structure that is really useful for managing memory in 
 
 See [example](./examples/ring_buffer.zig) and [source](./src/ring_buffer.zig) for more information on usage.
 
-### Memory Management
 
-#### MemoryPool
+### SPSCQueue
+
+> added v0.3.1 as `stdx.SPSCQueue`
+
+SPSCQueue is a lock-free, atomic queue for passing data safely between one producer thread and one consumer thread. It behaves like a lightweight channel, but avoids locks and blocking, making it a good fit for high-throughput, one-way handoff between threads. Use it when data only needs to flow in one direction and you want predictable, low-overhead communication.
+
+See [example](./examples/spsc_queue.zig) and [source](./src/spsc_queue.zig) for more information on usage.
+
+### MemoryPool
 
 > added v0.0.1 as `stdx.MemoryPool`
 
 A `MemoryPool` is a structure that uses pre-allocated blocks of memory to quickly allocoate and deallocate resources quickly. It is very useful in situations where you have statically allocated memory but you will have fluctuating usage of that memory. A good example would be handling messages flowing throughout a system.
 
 See [example](./examples/memory_pool.zig) and [source](./src/memory_pool.zig) for more information on usage.
+
+### EventEmitter
+
+> added v0.0.6 as `stdx.EventEmitter`
+
+The `EventEmitter` is a tool for managing communications across callbacks. This is a very similar implementation to the nodejs event emitter class which is one of the fundemental building blocks for asynchronous events. The `EventEmitter` provides a simple(ish) api to register `Callback`s with appropriate `Context`s to be called when a specific `Event` is called.
+
+See [example](./examples/event_emitter.zig) and [source](./src/event_emitter.zig) for more information on usage.
+

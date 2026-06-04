@@ -6,6 +6,7 @@ pub const ManagedQueue = @import("./managed_queue.zig").ManagedQueue;
 pub const MemoryPool = @import("./memory_pool.zig").MemoryPool;
 pub const RingBuffer = @import("./ring_buffer.zig").RingBuffer;
 pub const Signal = @import("./signal.zig").Signal;
+pub const SPSCQueue = @import("./spsc_queue.zig").SPSCQueue;
 pub const UnbufferedChannel = @import("./unbuffered_channel.zig").UnbufferedChannel;
 pub const UnmanagedQueue = @import("./unmanaged_queue.zig").UnmanagedQueue;
 pub const UnmanagedQueueNode = @import("./unmanaged_queue.zig").Node;

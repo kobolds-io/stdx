@@ -1,0 +1,212 @@
+const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
+
+/// A lock-free, wait-free Single-Producer Single-Consumer queue.
+///
+/// `SPSCQueue` allows exactly one thread to call `enqueue` and exactly one
+/// thread to call `dequeue` concurrently without any mutexes or blocking.
+/// Ordering between the two threads is enforced using acquire/release atomics
+/// on the head and tail indices.
+///
+/// Properties:
+///   - O(1) enqueue and dequeue
+///   - FIFO ordering guaranteed
+///   - No allocations after `init`
+///   - Capacity is fixed and must be a non-zero power of two
+///
+/// Safety rules:
+///   - Only ONE thread may call `enqueue` at a time.
+///   - Only ONE thread may call `dequeue` at a time.
+///   - Violating either rule is undefined behavior.
+pub fn SPSCQueue(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        /// Index of the next slot to read from.
+        /// Only written by the consumer. Read by both sides.
+        /// Aligned to 64 bytes to occupy its own cache line and prevent
+        /// false sharing with `tail`, which lives on a different core.
+        head: usize align(64) = 0,
+
+        /// Index of the next slot to write into.
+        /// Only written by the producer. Read by both sides.
+        /// Aligned to 64 bytes for the same false-sharing reason as `head`.
+        tail: usize align(64) = 0,
+
+        /// Backing storage for queue elements. Allocated at `init`, freed at `deinit`.
+        buffer: []T,
+
+        /// Number of slots in `buffer`. Always a non-zero power of two
+        capacity: usize,
+
+        /// initialize the SPSCQueue. Can fail if the capacity is not non-zero and a power of two or
+        /// due to allocator errors while allocating the backing buffer.
+        pub fn init(allocator: std.mem.Allocator, capacity: usize) !Self {
+            // ensure that capacity is non-zero and a power of 2
+            // NOTE: this is kind of a cool programmer formula to just plug into a calculator and see work ;)
+            if ((capacity == 0) or (capacity & (capacity - 1)) != 0) {
+                return error.CapacityMustBeNonZeroPowerOfTwo;
+            }
+
+            const buf = try allocator.alloc(T, capacity);
+            errdefer allocator.free(buf);
+
+            return Self{
+                .buffer = buf,
+                .head = 0,
+                .tail = 0,
+                .capacity = capacity,
+            };
+        }
+
+        /// free resources
+        pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+            allocator.free(self.buffer);
+        }
+
+        /// Attempts to add `item` to the back of the queue.
+        ///
+        /// Returns `true` if the item was enqueued successfully.
+        /// Returns `false` if the queue is full - the caller is responsible for retrying. This function never blocks.
+        ///
+        /// Must only be called from the single producer thread.
+        ///
+        /// Atomic ordering:
+        ///   - `tail` is loaded with `.monotonic` because only this thread writes it.
+        ///   - `head` is loaded with `.acquire` to observe the latest value written
+        ///     by the consumer's `.release` store, ensuring we do not overwrite a
+        ///     slot the consumer has not yet read.
+        ///   - `tail` is stored with `.release` so the consumer's `.acquire` load
+        ///     of `tail` in `dequeue` sees the item written to `buffer` above it.
+        pub fn enqueue(self: *Self, item: T) bool {
+            const tail = @atomicLoad(usize, &self.tail, .monotonic);
+            const next = tail + 1;
+
+            if (next - @atomicLoad(usize, &self.head, .acquire) > self.capacity) {
+                // queue is full
+                return false;
+            }
+
+            // item is stored in the buffer
+            self.buffer[tail & (self.capacity - 1)] = item;
+            @atomicStore(usize, &self.tail, next, .release);
+            return true;
+        }
+
+        /// Attempts to remove and return the item at the front of the queue.
+        ///
+        /// Returns the item if one is available.
+        /// Returns `null` if the queue is empty - caller is responsible for retrying. This function never blocks.
+        ///
+        /// Must only be called from the single consumer thread.
+        ///
+        /// Atomic ordering:
+        ///   - `head` is loaded with `.monotonic` because only this thread writes it.
+        ///   - `tail` is loaded with `.acquire` to observe the latest value written
+        ///     by the producer's `.release` store, ensuring we see the item in
+        ///     `buffer` that was written before `tail` was advanced.
+        ///   - `head` is stored with `.release` so the producer's `.acquire` load
+        ///     of `head` in `enqueue` sees the freed slot and may write into it.
+        pub fn dequeue(self: *Self) ?T {
+            const head = @atomicLoad(usize, &self.head, .monotonic);
+            if (head == @atomicLoad(usize, &self.tail, .acquire)) {
+                // the queue is empty
+                return null;
+            }
+
+            // item is found
+            const item = self.buffer[head & (self.capacity - 1)];
+            @atomicStore(usize, &self.head, head + 1, .release);
+            return item;
+        }
+    };
+}
+
+test "single threaded push/pop" {
+    const allocator = testing.allocator;
+    var q = try SPSCQueue(i32).init(allocator, 16);
+    defer q.deinit(allocator);
+
+    const ok = q.enqueue(123);
+    try testing.expectEqual(true, ok);
+    try testing.expectEqual(123, q.dequeue());
+    try testing.expectEqual(null, q.dequeue());
+}
+
+test "single threaded full" {
+    const allocator = testing.allocator;
+
+    const capacity = 8;
+
+    var q = try SPSCQueue(i32).init(allocator, capacity);
+    defer q.deinit(allocator);
+
+    // fill up the buffer
+    for (0..capacity) |_| try testing.expectEqual(true, q.enqueue(123));
+
+    try testing.expectEqual(false, q.enqueue(123));
+}
+
+test "single threaded empty" {
+    const allocator = testing.allocator;
+
+    const capacity = 8;
+    const val: i32 = 123;
+
+    var q = try SPSCQueue(i32).init(allocator, capacity);
+    defer q.deinit(allocator);
+
+    // fill up the buffer
+    for (0..capacity) |_| try testing.expectEqual(true, q.enqueue(val));
+    // empty the buffer
+    for (0..capacity) |_| try testing.expectEqual(val, q.dequeue());
+
+    try testing.expectEqual(null, q.dequeue());
+}
+
+test "spsc threaded producer consumer" {
+    const allocator = testing.allocator;
+    const capacity = 1024;
+    const total_items = 1_000_000;
+
+    var q = try SPSCQueue(u64).init(allocator, capacity);
+    defer q.deinit(allocator);
+
+    const Producer = struct {
+        fn run(queue: *SPSCQueue(u64)) void {
+            var i: u64 = 0;
+            while (i < total_items) {
+                if (queue.enqueue(i)) {
+                    i += 1;
+                }
+                // spin until push succeeds
+            }
+        }
+    };
+
+    const Consumer = struct {
+        fn run(queue: *SPSCQueue(u64), result: *u64) void {
+            var count: u64 = 0;
+            var expected: u64 = 0;
+            while (count < total_items) {
+                if (queue.dequeue()) |item| {
+                    assert(item == expected);
+                    expected += 1;
+                    count += 1;
+                }
+            }
+            result.* = count;
+        }
+    };
+
+    var received: u64 = 0;
+
+    const producer = try std.Thread.spawn(.{}, Producer.run, .{&q});
+    const consumer = try std.Thread.spawn(.{}, Consumer.run, .{ &q, &received });
+
+    producer.join();
+    consumer.join();
+
+    try testing.expectEqual(@as(u64, total_items), received);
+}

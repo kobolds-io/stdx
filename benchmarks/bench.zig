@@ -18,5 +18,6 @@ comptime {
     _ = @import("memory_pool.zig");
     _ = @import("ring_buffer.zig");
     _ = @import("signal.zig");
+    _ = @import("spsc_queue.zig");
     _ = @import("unbuffered_channel.zig");
 }

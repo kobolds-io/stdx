@@ -73,6 +73,7 @@ fn setupExamples(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.
         "mpmc_bus",
         "mpmc_queue",
         "ring_buffer",
+        "spsc_queue",
         "signal",
         "unbuffered_channel",
         "unmanaged_queue",
