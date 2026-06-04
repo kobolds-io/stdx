@@ -219,7 +219,7 @@ The `UnbufferedChannel` is a structure that can be used to safely transmit data 
 
 See [example](./examples/unbuffered_channel.zig) and [source](./src/unbuffered_channel.zig) for more information on usage.
 
-#### Signal
+### Signal
 
 > added v0.0.8 as `stdx.Signal`
 
@@ -258,7 +258,7 @@ See [example](./examples/ring_buffer.zig) and [source](./src/ring_buffer.zig) fo
 
 > added v0.3.1 as `stdx.SPSCQueue`
 
-A `SPSCQueue` is an atomic queue that allows for a single producer and a single consumer to transfer data safely between threads. It operates similarly to channels excepted it is lock free. This data structure is very useful when data is flowing between threads in a single direction. .
+SPSCQueue is a lock-free, atomic queue for passing data safely between one producer thread and one consumer thread. It behaves like a lightweight channel, but avoids locks and blocking, making it a good fit for high-throughput, one-way handoff between threads. Use it when data only needs to flow in one direction and you want predictable, low-overhead communication.
 
 See [example](./examples/spsc_queue.zig) and [source](./src/spsc_queue.zig) for more information on usage.
 
