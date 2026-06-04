@@ -11,7 +11,7 @@ const Producer = struct {
         var i: u64 = 0;
         while (i < total_items) {
             // spin until space is available
-            if (queue.push(i)) {
+            if (queue.enqueue(i)) {
                 i += 1;
                 continue;
             }
@@ -25,7 +25,7 @@ const Consumer = struct {
     fn run(queue: *SPSCQueue(u64), total_items: usize) void {
         var expected: u64 = 0;
         while (expected < total_items) {
-            if (queue.pop()) |val| {
+            if (queue.dequeue()) |val| {
                 assert(val == expected);
                 expected += 1;
             }

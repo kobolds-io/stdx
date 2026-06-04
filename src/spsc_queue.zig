@@ -33,7 +33,7 @@ pub fn SPSCQueue(comptime T: type) type {
             allocator.free(self.buffer);
         }
 
-        pub fn push(self: *Self, item: T) bool {
+        pub fn enqueue(self: *Self, item: T) bool {
             const tail = @atomicLoad(usize, &self.tail, .monotonic);
             const next = tail + 1;
 
@@ -48,7 +48,7 @@ pub fn SPSCQueue(comptime T: type) type {
             return true;
         }
 
-        pub fn pop(self: *Self) ?T {
+        pub fn dequeue(self: *Self) ?T {
             const head = @atomicLoad(usize, &self.head, .monotonic);
             if (head == @atomicLoad(usize, &self.tail, .acquire)) {
                 // the queue is empty
@@ -68,10 +68,10 @@ test "single threaded push/pop" {
     var q = try SPSCQueue(i32).init(allocator, 16);
     defer q.deinit(allocator);
 
-    const ok = q.push(123);
+    const ok = q.enqueue(123);
     try testing.expectEqual(true, ok);
-    try testing.expectEqual(123, q.pop());
-    try testing.expectEqual(null, q.pop());
+    try testing.expectEqual(123, q.dequeue());
+    try testing.expectEqual(null, q.dequeue());
 }
 
 test "single threaded full" {
@@ -83,9 +83,9 @@ test "single threaded full" {
     defer q.deinit(allocator);
 
     // fill up the buffer
-    for (0..capacity) |_| try testing.expectEqual(true, q.push(123));
+    for (0..capacity) |_| try testing.expectEqual(true, q.enqueue(123));
 
-    try testing.expectEqual(false, q.push(123));
+    try testing.expectEqual(false, q.enqueue(123));
 }
 
 test "single threaded empty" {
@@ -98,11 +98,11 @@ test "single threaded empty" {
     defer q.deinit(allocator);
 
     // fill up the buffer
-    for (0..capacity) |_| try testing.expectEqual(true, q.push(val));
+    for (0..capacity) |_| try testing.expectEqual(true, q.enqueue(val));
     // empty the buffer
-    for (0..capacity) |_| try testing.expectEqual(val, q.pop());
+    for (0..capacity) |_| try testing.expectEqual(val, q.dequeue());
 
-    try testing.expectEqual(null, q.pop());
+    try testing.expectEqual(null, q.dequeue());
 }
 
 test "spsc threaded producer consumer" {
@@ -117,7 +117,7 @@ test "spsc threaded producer consumer" {
         fn run(queue: *SPSCQueue(u64)) void {
             var i: u64 = 0;
             while (i < total_items) {
-                if (queue.push(i)) {
+                if (queue.enqueue(i)) {
                     i += 1;
                 }
                 // spin until push succeeds
@@ -130,7 +130,7 @@ test "spsc threaded producer consumer" {
             var count: u64 = 0;
             var expected: u64 = 0;
             while (count < total_items) {
-                if (queue.pop()) |item| {
+                if (queue.dequeue()) |item| {
                     assert(item == expected);
                     expected += 1;
                     count += 1;
