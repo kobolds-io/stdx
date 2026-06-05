@@ -33,7 +33,7 @@ In general people use this library for the `RingBuffer` and the `MemoryPool` dat
 | zig version | stdx version |
 |-------------|--------------|
 | 0.15.x      | 0.2.1        |
-| 0.16.0      | 0.3.0        |
+| 0.16.0      | 0.3.0+       |
 
 
 Using `stdx` is just as simple as using any other `zig` dependency.
@@ -61,7 +61,7 @@ fn main(init: std.process.Init) !void {
 Install using zig fetch
 
 ```bash
-zig fetch --save  https://gitlab.com/kobolds-io/stdx/-/archive/v0.3.0/stdx-v0.3.0.tar.gz
+zig fetch --save  https://gitlab.com/kobolds-io/stdx/-/archive/v0.4.0/stdx-v0.4.0.tar.gz
 ```
 
 Alternatively, you can install `stdx` just like any other `zig` dependency by editing your `build.zig.zon` file.
@@ -69,7 +69,7 @@ Alternatively, you can install `stdx` just like any other `zig` dependency by ed
 ```zig
     .dependencies = .{
         .stdx = .{
-            .url = "https://gitlab.com/kobolds-io/stdx/-/archive/v0.3.0/stdx-v0.3.0.tar.gz",
+            .url = "https://gitlab.com/kobolds-io/stdx/-/archive/v0.4.0/stdx-v0.4.0.tar.gz",
             .hash = "<hash>",
         },
     },
@@ -256,7 +256,7 @@ See [example](./examples/ring_buffer.zig) and [source](./src/ring_buffer.zig) fo
 
 ### SPSCQueue
 
-> added v0.3.1 as `stdx.SPSCQueue`
+> added v0.4.0 as `stdx.SPSCQueue`
 
 SPSCQueue is a lock-free, atomic queue for passing data safely between one producer thread and one consumer thread. It behaves like a lightweight channel, but avoids locks and blocking, making it a good fit for high-throughput, one-way handoff between threads. Use it when data only needs to flow in one direction and you want predictable, low-overhead communication.
 
@@ -277,4 +277,3 @@ See [example](./examples/memory_pool.zig) and [source](./src/memory_pool.zig) fo
 The `EventEmitter` is a tool for managing communications across callbacks. This is a very similar implementation to the nodejs event emitter class which is one of the fundemental building blocks for asynchronous events. The `EventEmitter` provides a simple(ish) api to register `Callback`s with appropriate `Context`s to be called when a specific `Event` is called.
 
 See [example](./examples/event_emitter.zig) and [source](./src/event_emitter.zig) for more information on usage.
-
