@@ -1,0 +1,7 @@
+stages:
+  - test
+  - build
+
+include:
+  - local: "/cicd/test.yaml"
+  - local: "/cicd/build.yaml"
