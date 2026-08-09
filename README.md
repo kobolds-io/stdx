@@ -3,7 +3,8 @@
 
 <div align="center">
     <a href="https://ziglang.org/"><img src="https://img.shields.io/badge/Zig-0.16.0-orange.svg?logo=zig" alt="Zig Version"></a>
-<a href="https://gitlab.com/kobolds-io/stdx"><img src="https://img.shields.io/gitlab/last-commit/kobolds-io/stdx" alt="GitHub last commit"></a>
+    <a href="https://gitlab.com/kobolds-io/stdx"><img src="https://img.shields.io/gitlab/last-commit/kobolds-io/stdx" alt="GitLab last commit"></a>
+    <a href="https://gitlab.com/kobolds-io/stdx"><img src="https://img.shields.io/gitlab/gitlab-ci/kobolds-io/stdx" alt="GitLab CI status"></a>
 </div>
 
 
