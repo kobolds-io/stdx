@@ -7,23 +7,31 @@ const constants = @import("./constants.zig");
 const testing = std.testing;
 
 const MemoryPool = @import("stdx").MemoryPool;
+const RingBuffer = @import("stdx").RingBuffer;
 
 const BenchmarkMemoryPoolCreate = struct {
     const Self = @This();
 
     list: *std.array_list.Managed(usize),
+    reclaim_queue: *RingBuffer(*usize),
     memory_pool: *MemoryPool(usize),
 
-    fn new(list: *std.array_list.Managed(usize), memory_pool: *MemoryPool(usize)) Self {
+    fn new(
+        list: *std.array_list.Managed(usize),
+        memory_pool: *MemoryPool(usize),
+        reclaim_queue: *RingBuffer(*usize),
+    ) Self {
         return .{
             .list = list,
+            .reclaim_queue = reclaim_queue,
             .memory_pool = memory_pool,
         };
     }
 
     pub fn run(self: *Self, _: std.mem.Allocator) void {
         for (self.list.items) |_| {
-            _ = self.memory_pool.create() catch unreachable;
+            const ptr = self.memory_pool.create() catch unreachable;
+            self.reclaim_queue.enqueueAssumeCapacity(ptr);
         }
     }
 };
@@ -32,18 +40,25 @@ const BenchmarkMemoryPoolUnsafeCreate = struct {
     const Self = @This();
 
     list: *std.array_list.Managed(usize),
+    reclaim_queue: *RingBuffer(*usize),
     memory_pool: *MemoryPool(usize),
 
-    fn new(list: *std.array_list.Managed(usize), memory_pool: *MemoryPool(usize)) Self {
+    fn new(
+        list: *std.array_list.Managed(usize),
+        memory_pool: *MemoryPool(usize),
+        reclaim_queue: *RingBuffer(*usize),
+    ) Self {
         return .{
             .list = list,
+            .reclaim_queue = reclaim_queue,
             .memory_pool = memory_pool,
         };
     }
 
     pub fn run(self: *Self, _: std.mem.Allocator) void {
         for (self.list.items) |_| {
-            _ = self.memory_pool.unsafeCreate() catch unreachable;
+            const ptr = self.memory_pool.unsafeCreate() catch unreachable;
+            self.reclaim_queue.enqueueAssumeCapacity(ptr);
         }
     }
 };
@@ -52,24 +67,24 @@ var memory_pool_create: MemoryPool(usize) = undefined;
 var memory_pool_unsafe_create: MemoryPool(usize) = undefined;
 
 var data_list: std.array_list.Managed(usize) = undefined;
+var reclaim_create_queue: RingBuffer(*usize) = undefined;
+var reclaim_unsafe_create_queue: RingBuffer(*usize) = undefined;
 const allocator = testing.allocator;
 
 fn beforeEachCreate() void {
-    var assigned_iter = memory_pool_create.assigned_map.keyIterator();
-    while (assigned_iter.next()) |entry| {
-        const key = entry.*;
+    while (reclaim_create_queue.dequeue()) |ptr| memory_pool_create.destroy(ptr);
+}
 
-        memory_pool_create.unsafeDestroy(key);
-    }
+fn afterAllCreate() void {
+    while (reclaim_create_queue.dequeue()) |ptr| memory_pool_create.destroy(ptr);
 }
 
 fn beforeEachUnsafeCreate() void {
-    var assigned_key_iter = memory_pool_unsafe_create.assigned_map.keyIterator();
-    while (assigned_key_iter.next()) |key_entry| {
-        const key = key_entry.*;
+    while (reclaim_unsafe_create_queue.dequeue()) |ptr| memory_pool_unsafe_create.destroy(ptr);
+}
 
-        memory_pool_unsafe_create.unsafeDestroy(key);
-    }
+fn afterAllUnsafeCreate() void {
+    while (reclaim_unsafe_create_queue.dequeue()) |ptr| memory_pool_unsafe_create.destroy(ptr);
 }
 
 test "MemoryPool benchmarks" {
@@ -95,8 +110,14 @@ test "MemoryPool benchmarks" {
     memory_pool_create = try MemoryPool(usize).init(allocator, io, data_list.capacity);
     defer memory_pool_create.deinit();
 
+    reclaim_create_queue = try RingBuffer(*usize).initCapacity(allocator, data_list.capacity);
+    defer reclaim_create_queue.deinit(allocator);
+
     memory_pool_unsafe_create = try MemoryPool(usize).init(allocator, io, data_list.capacity);
     defer memory_pool_unsafe_create.deinit();
+
+    reclaim_unsafe_create_queue = try RingBuffer(*usize).initCapacity(allocator, data_list.capacity);
+    defer reclaim_unsafe_create_queue.deinit(allocator);
 
     const memory_pool_create_title = try std.fmt.allocPrint(
         allocator,
@@ -114,19 +135,21 @@ test "MemoryPool benchmarks" {
 
     try bench.addParam(
         memory_pool_create_title,
-        &BenchmarkMemoryPoolCreate.new(&data_list, &memory_pool_create),
+        &BenchmarkMemoryPoolCreate.new(&data_list, &memory_pool_create, &reclaim_create_queue),
         .{
             .hooks = .{
                 .before_each = beforeEachCreate,
+                .after_all = afterAllCreate,
             },
         },
     );
     try bench.addParam(
         memory_pool_unsafe_create_title,
-        &BenchmarkMemoryPoolUnsafeCreate.new(&data_list, &memory_pool_unsafe_create),
+        &BenchmarkMemoryPoolUnsafeCreate.new(&data_list, &memory_pool_unsafe_create, &reclaim_unsafe_create_queue),
         .{
             .hooks = .{
                 .before_each = beforeEachUnsafeCreate,
+                .after_all = afterAllUnsafeCreate,
             },
         },
     );
