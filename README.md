@@ -1,17 +1,12 @@
 
 # Overview
 
-
 ![Zig](https://img.shields.io/badge/Zig-0.16.0-orange.svg?logo=zig)
 ![License](https://img.shields.io/gitlab/license/kobolds-io/stdx)
-
-
-<!-- <div align="center"> -->
-    <!-- <a href="https://ziglang.org/"><img src="https://img.shields.io/badge/Zig-0.16.0-orange.svg?logo=zig" alt="Zig Version"></a> -->
-    <!-- <a href="https://gitlab.com/kobolds-io/stdx"><img src="https://img.shields.io/gitlab/last-commit/kobolds-io/stdx" alt="GitLab last commit"></a> -->
-    <!-- <a href="https://gitlab.com/kobolds-io/stdx"><img src="https://img.shields.io/gitlab/gitlab-ci/kobolds-io/stdx" alt="GitLab CI status"></a> -->
-<!-- </div> -->
-
+![GitLab Stars](https://img.shields.io/gitlab/stars/kobolds-io/stdx)
+![Github Stars](https://img.shields.io/github/stars/kobolds-io/stdx)
+![Pipeline Status](https://img.shields.io/gitlab/pipeline-status/kobolds-io/stdx)
+![Last Commit](https://img.shields.io/gitlab/last-commit/kobolds-io/stdx)
 
 This is a library adding several generally useful tools that are either not included in the standard library or have slightly different behavior. As the `zig` programming language matures, we should get more and more awesome `std` library features but until then...
 
