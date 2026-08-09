@@ -12,16 +12,21 @@ const RingBuffer = @import("./ring_buffer.zig").RingBuffer;
 pub fn MemoryPool(comptime T: type) type {
     return struct {
         const Self = @This();
+
         /// The allocator responsible for managing memory allocations.
         ///
         /// It allows the memory pool to be flexible with how memory is allocated and deallocated,
         /// providing a customizable way to manage raw memory.
         allocator: std.mem.Allocator,
-        /// A map that tracks memory blocks that are currently assigned.
+
+        /// A bitset that tracks memory blocks that are currently assigned.
         ///
-        /// The map ensures that the pool does not mistakenly return or reuse memory blocks
-        /// that are still in use, helping to track the current state of the pool's memory blocks.
-        assigned_map: std.AutoHashMapUnmanaged(*T, bool),
+        /// The bitset ensures that the pool does not mistakenly return or reuse memory slots
+        /// that are still in use, helping to track the current state of the pool's memory slots.
+        assigned_bits: std.DynamicBitSetUnmanaged,
+
+        /// current count of the assigned pointers that have been created by this memory pool
+        assigned_count: usize,
 
         /// A list that holds the memory blocks allocated by the pool.
         ///
@@ -47,11 +52,14 @@ pub fn MemoryPool(comptime T: type) type {
         io: std.Io,
 
         pub fn init(allocator: std.mem.Allocator, io: std.Io, capacity: usize) !Self {
-            var free_queue = try RingBuffer(*T).initCapacity(allocator, capacity);
-            errdefer free_queue.deinit(allocator);
+            var free_list = try RingBuffer(*T).initCapacity(allocator, capacity);
+            errdefer free_list.deinit(allocator);
 
             var backing_buffer = try std.ArrayList(T).initCapacity(allocator, capacity);
             errdefer backing_buffer.deinit(allocator);
+
+            var assigned_bits = try std.DynamicBitSetUnmanaged.initEmpty(allocator, capacity);
+            errdefer assigned_bits.deinit(allocator);
 
             for (0..capacity) |_| {
                 // provide a zero value for the generic type so that it can
@@ -61,20 +69,21 @@ pub fn MemoryPool(comptime T: type) type {
                 backing_buffer.appendAssumeCapacity(p);
             }
 
-            for (backing_buffer.items) |*v| {
-                free_queue.enqueueAssumeCapacity(v);
-            }
+            for (backing_buffer.items) |*v| free_list.enqueueAssumeCapacity(v);
 
             // if the backing buffer does not match the free queue, this means that the memory pool
             // will fundementally not work. We would have returned an allocation error already upon
             // creating the backing_buffer and the free_queue. This is purely a sanity check.
-            assert(backing_buffer.items.len == free_queue.count);
+            assert(backing_buffer.items.len == free_list.count);
+            assert(free_list.count == capacity);
+            assert(assigned_bits.count() == 0);
 
             return Self{
                 .allocator = allocator,
-                .assigned_map = .empty,
+                .assigned_bits = assigned_bits,
+                .assigned_count = 0,
                 .capacity = capacity,
-                .free_list = free_queue,
+                .free_list = free_list,
                 .backing_buffer = backing_buffer,
                 .mutex = .init,
                 .io = io,
@@ -82,8 +91,11 @@ pub fn MemoryPool(comptime T: type) type {
         }
 
         pub fn deinit(self: *Self) void {
+            // NOTE: we could return a boolean here to denote if there is a value that leaked
+            assert(self.assigned_count == 0);
+
             self.free_list.deinit(self.allocator);
-            self.assigned_map.deinit(self.allocator);
+            self.assigned_bits.deinit(self.allocator);
             self.backing_buffer.deinit(self.allocator);
         }
 
@@ -97,7 +109,7 @@ pub fn MemoryPool(comptime T: type) type {
 
         /// return the number assigned ptrs in the memory pool.
         pub fn countUnsafe(self: *Self) usize {
-            return self.assigned_map.count();
+            return self.assigned_count;
         }
 
         /// return the number of free ptrs remaining in the memory pool.
@@ -126,13 +138,16 @@ pub fn MemoryPool(comptime T: type) type {
 
         /// Non thread safe version of `create`
         pub fn unsafeCreate(self: *Self) !*T {
-            if (self.availableUnsafe() == 0) return error.OutOfMemory;
+            const ptr = self.free_list.dequeue() orelse return error.OutOfMemory;
+            const index = self.slotIndex(ptr).?;
 
-            if (self.free_list.dequeue()) |ptr| {
-                try self.assigned_map.put(self.allocator, ptr, true);
+            // guard to ensure that we are not overriding and existing ptr
+            assert(!self.assigned_bits.isSet(index));
 
-                return ptr;
-            } else unreachable;
+            self.assigned_bits.set(index);
+            self.assigned_count += 1;
+
+            return ptr;
         }
 
         /// Allocates multiple memory blocks from the memory pool. Thread safe
@@ -151,13 +166,21 @@ pub fn MemoryPool(comptime T: type) type {
         pub fn unsafeCreateN(self: *Self, allocator: std.mem.Allocator, n: usize) ![]*T {
             if (self.availableUnsafe() < n) return error.OutOfMemory;
 
+            // create a small list
             var list = try std.ArrayList(*T).initCapacity(allocator, n);
             errdefer list.deinit(allocator);
 
             for (0..n) |_| {
                 if (self.free_list.dequeue()) |ptr| {
-                    try list.append(allocator, ptr);
-                    try self.assigned_map.put(self.allocator, ptr, true);
+                    const index = self.slotIndex(ptr).?;
+
+                    // guard to ensure that we are not overriding and existing ptr
+                    assert(!self.assigned_bits.isSet(index));
+
+                    list.append(allocator, ptr) catch unreachable;
+
+                    self.assigned_bits.set(index);
+                    self.assigned_count += 1;
                 } else break;
             }
 
@@ -178,13 +201,47 @@ pub fn MemoryPool(comptime T: type) type {
 
         /// Unsafe version of `destroy`
         pub fn unsafeDestroy(self: *Self, ptr: *T) void {
-            const res = self.assigned_map.remove(ptr);
-            if (!res) {
-                log.err("ptr did not exist in pool {*}", .{ptr});
+            const index = self.slotIndex(ptr) orelse {
+                log.err("ptr does not belong to this pool: {*}", .{ptr});
+                unreachable;
+            };
+
+            if (!self.assigned_bits.isSet(index)) {
+                log.err("ptr is not assigned or was already freed: {*}", .{ptr});
                 unreachable;
             }
 
+            self.assigned_bits.unset(index);
+            self.assigned_count -= 1;
+
             self.free_list.enqueueAssumeCapacity(ptr);
+        }
+
+        // returns the index of the passed pointer is inside of the backing buffer
+        fn slotIndex(self: *const Self, ptr: *T) ?usize {
+            // get the location of the first item in the backing buffer
+            const first = @intFromPtr(self.backing_buffer.items.ptr);
+
+            // get the location of the target item
+            const address = @intFromPtr(ptr);
+
+            // capture the "step" size
+            const item_size = @sizeOf(T);
+
+            // get the last item in the backing buffer
+            const end = first + (self.backing_buffer.items.len * item_size);
+
+            // ensure that the item is within the memory pool
+            if (address < first or address >= end) return null;
+
+            // figure out the location of the target
+            const offset = address - first;
+
+            // the offset calculated is somehow not stepping to the same size of the item within
+            if (offset % item_size != 0) return null;
+
+            // return the index of where the item is in the backing buffer
+            return offset / item_size;
         }
     };
 }
@@ -310,5 +367,8 @@ test "data types" {
         }
 
         try testing.expectEqual(ptrs.items.len, memory_pool.capacity);
+
+        // free all the pointers
+        for (ptrs.items) |ptr| memory_pool.destroy(ptr);
     }
 }
