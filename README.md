@@ -1,4 +1,10 @@
+
 # Overview
+
+[![Latest Release](https://gitlab.com/kobolds-io/stdx/-/badges/release.svg)](https://gitlab.com/kobolds-io/stdx/-/releases)
+![License](https://img.shields.io/gitlab/license/kobolds-io/stdx)
+![Last Commit](https://img.shields.io/gitlab/last-commit/kobolds-io/stdx)
+![Zig](https://img.shields.io/badge/Zig-0.16.0-orange.svg?logo=zig)
 
 This is a library adding several generally useful tools that are either not included in the standard library or have slightly different behavior. As the `zig` programming language matures, we should get more and more awesome `std` library features but until then...
 
