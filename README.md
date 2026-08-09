@@ -2,7 +2,9 @@
 # Overview
 
 
-[![zig version]](https://img.shields.io/badge/Zig-0.16.0-orange.svg?logo=zig)
+![Zig](https://img.shields.io/badge/Zig-0.16.0-orange.svg?logo=zig)
+![License](https://img.shields.io/gitlab/license/kobolds-io/stdx)
+
 
 <!-- <div align="center"> -->
     <!-- <a href="https://ziglang.org/"><img src="https://img.shields.io/badge/Zig-0.16.0-orange.svg?logo=zig" alt="Zig Version"></a> -->
