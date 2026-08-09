@@ -61,7 +61,7 @@ fn main(init: std.process.Init) !void {
 Install using zig fetch
 
 ```bash
-zig fetch --save  https://gitlab.com/kobolds-io/stdx/-/archive/v0.4.1/stdx-v0.4.1.tar.gz
+zig fetch --save  https://gitlab.com/kobolds-io/stdx/-/archive/v0.4.2/stdx-v0.4.2.tar.gz
 ```
 
 Alternatively, you can install `stdx` just like any other `zig` dependency by editing your `build.zig.zon` file.
@@ -69,7 +69,7 @@ Alternatively, you can install `stdx` just like any other `zig` dependency by ed
 ```zig
     .dependencies = .{
         .stdx = .{
-            .url = "https://gitlab.com/kobolds-io/stdx/-/archive/v0.4.1/stdx-v0.4.1.tar.gz",
+            .url = "https://gitlab.com/kobolds-io/stdx/-/archive/v0.4.2/stdx-v0.4.2.tar.gz",
             .hash = "<hash>",
         },
     },
@@ -138,60 +138,60 @@ Example output
 |----------------------------|
 benchmark             runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
 ----------------------------------------------------------------------------------------------------------------------------------
-send 10000 items      65535    6.582s         100.443us ± 74.163us  (93.403us ... 17.685ms)      97.897us   158.247us  216.298us  
-receive 10000 items   65535    5.486s         83.719us ± 39.086us   (78.145us ... 5.366ms)       80.685us   152.69us   210.89us   
+send 10000 items      65535    6.758s         103.129us ± 56.977us  (94.173us ... 2.228ms)       97.916us   185.366us  305.859us  
+receive 10000 items   65535    5.483s         83.677us ± 46.198us   (78.25us ... 2.358ms)        81.354us   123.01us   153.525us  
 
 |-------------------------|
 | EventEmitter Benchmarks |
 |-------------------------|
 benchmark                        runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
 ---------------------------------------------------------------------------------------------------------------------------------------------
-emit 1 listeners 10000 items     1        42.919us       42.919us ± 0ns        (42.919us ... 42.919us)      42.919us   42.919us   42.919us   
-emit 10 listeners 10000 items    1        108.16us       108.16us ± 0ns        (108.16us ... 108.16us)      108.16us   108.16us   108.16us   
-emit 100 listeners 10000 items   1        965.921us      965.921us ± 0ns       (965.921us ... 965.921us)    965.921us  965.921us  965.921us  
+emit 1 listeners 10000 items     1        34.873us       34.873us ± 0ns        (34.873us ... 34.873us)      34.873us   34.873us   34.873us   
+emit 10 listeners 10000 items    1        127.325us      127.325us ± 0ns       (127.325us ... 127.325us)    127.325us  127.325us  127.325us  
+emit 100 listeners 10000 items   1        965.19us       965.19us ± 0ns        (965.19us ... 965.19us)      965.19us   965.19us   965.19us   
 
 |-----------------------|
 | MemoryPool Benchmarks |
 |-----------------------|
 benchmark                  runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
 ---------------------------------------------------------------------------------------------------------------------------------------
-create 10000 items         65535    11.685s        178.314us ± 69.83us   (163.422us ... 7.901ms)      173.104us  355.144us  439.676us  
-unsafeCreate 10000 items   65535    10.33s         157.633us ± 95.015us  (143.799us ... 21.987ms)     155.112us  231.164us  338.253us  
+create 10000 items         65535    7.338s         111.983us ± 222.903us (103.098us ... 56.148ms)     107.315us  188.812us  289.756us  
+unsafeCreate 10000 items   65535    2.46s          37.546us ± 26.152us   (31.679us ... 3.347ms)       36.152us   60.501us   81.959us   
 
 |-----------------------|
 | RingBuffer Benchmarks |
 |-----------------------|
 benchmark                 runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
 --------------------------------------------------------------------------------------------------------------------------------------
-prepend 10000 items       65535    2.202s         33.611us ± 26.286us   (31.613us ... 2.555ms)       32.528us   53.687us   73.069us   
-enqueue 10000 items       65535    2.068s         31.57us ± 21.238us    (29.733us ... 1.965ms)       30.485us   52.625us   77.973us   
-enqueueMany 10000 items   65535    2.113s         32.257us ± 21.989us   (30.5us ... 2.584ms)         31.302us   50.415us   72.556us   
-dequeue 10000 items       65535    2.129s         32.493us ± 24.179us   (30.902us ... 3.52ms)        31.545us   50.08us    69.156us   
-dequeueMany 10000 items   65535    2.134s         32.569us ± 18.521us   (30.727us ... 1.878ms)       31.487us   53.854us   76.081us   
-concatenate 10000 items   65535    2.213s         33.778us ± 17.403us   (30.984us ... 1.562ms)       32.912us   57.457us   79.33us    
-copy 10000 items          65535    2.202s         33.607us ± 14.318us   (30.427us ... 1.347ms)       32.947us   55.995us   75.985us   
-sort 10000 items          65535    31.83s         485.7us ± 319.158us   (445.451us ... 50.809ms)     481.307us  757.336us  929.362us  
+prepend 10000 items       65535    2.19s          33.43us ± 20.94us     (31.61us ... 3.341ms)        32.695us   49.459us   66.142us   
+enqueue 10000 items       65535    2.052s         31.319us ± 15.602us   (29.77us ... 1.341ms)        30.534us   47.761us   62.658us   
+enqueueMany 10000 items   65535    2.108s         32.174us ± 16.592us   (30.505us ... 1.811ms)       31.274us   49.685us   68.702us   
+dequeue 10000 items       65535    2.128s         32.478us ± 19.812us   (30.902us ... 2.511ms)       31.53us    48.531us   68.012us   
+dequeueMany 10000 items   65535    2.121s         32.365us ± 21.093us   (30.145us ... 3.586ms)       31.481us   48.585us   63.087us   
+concatenate 10000 items   65535    2.221s         33.897us ± 17.985us   (31.19us ... 1.619ms)        33.091us   51.95us    71.648us   
+copy 10000 items          65535    2.185s         33.344us ± 16.53us    (30.254us ... 1.561ms)       32.928us   50.223us   67.278us   
+sort 10000 items          65535    32.111s        489.992us ± 196.468us (449.964us ... 40.18ms)      489.539us  725.412us  897.449us  
 
 |-------------------|
 | Signal Benchmarks |
 |-------------------|
 benchmark                  runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
 ---------------------------------------------------------------------------------------------------------------------------------------
-send/receive 10000 items   65535    13.546s        206.71us ± 97.295us   (194.428us ... 20.028ms)     203.046us  300.959us  417.082us  
+send/receive 10000 items   65535    13.558s        206.891us ± 47.929us  (194.362us ... 4.781ms)      204.129us  327.755us  407.956us  
 
 |----------------------|
 | SPSCQueue Benchmarks |
 |----------------------|
 benchmark             runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
 ----------------------------------------------------------------------------------------------------------------------------------
-enqueue 32768 items   65535    2.455s         37.462us ± 23.54us    (33.107us ... 2.457ms)       35.786us   63.421us   86.974us   
+enqueue 32768 items   65535    2.433s         37.132us ± 13.599us   (34.916us ... 1.296ms)       35.82us    61.574us   80.153us   
 
 |------------------------------|
 | UnbufferedChannel Benchmarks |
 |------------------------------|
 benchmark                  runs     total time     time/run (avg ± σ)    (min ... max)                p75        p99        p995      
 ---------------------------------------------------------------------------------------------------------------------------------------
-send/receive 10000 items   65535    22.004s        335.77us ± 172.052us  (304.268us ... 32.905ms)     333.293us  515.434us  629.298us  
+send/receive 10000 items   65535    23.242s        354.66us ± 56.14us    (334.546us ... 4.329ms)      355.011us  536.348us  627.56us   
 ```
 
 ## Contributing
