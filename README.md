@@ -12,6 +12,11 @@ All data structures, algorithms and utilities included in this library are writt
 
 In general people use this library for the `RingBuffer` and the `MemoryPool` datastructures. See below for details.
 
+## Mirrors and Sources:
+
+- [GitLab source repo](https://gitlab.com/kobolds-io/stdx)
+- [Github mirror](https://github.com/kobolds-io/stdx)
+
 # Table of Contents
 
 1. [Overview](#overview)
